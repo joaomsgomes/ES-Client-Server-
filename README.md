@@ -1,2 +1,2 @@
-# ES-Client-Server-
+# ES-Client-Server- Computer Networks Project
 Ongoing Development...

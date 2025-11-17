@@ -1,0 +1,17 @@
+# Compiled files
+*.o
+*.out
+server
+client
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data files (opcional, se quiserem versionar comentem)
+data/*.txt
+!data/.gitkeep

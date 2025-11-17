@@ -1,0 +1,6 @@
+login 111111 oldpass1
+changePass oldpass1 newpass2
+logout
+login 111111 newpass2
+logout
+exit

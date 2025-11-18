@@ -54,6 +54,23 @@
 #define STATUS_CLS "CLS"
 #define STATUS_NID "NID"
 
+// Data Structures for Messages
+
+struct addrinfo{
+
+    int ai_flags;
+    int ai_family;
+    int ai_socktype;
+    int ai_protocol;
+    socklen_t ai_addrlen;
+    struct sockaddr* ai_addr;
+    char* ai_canonname;
+    struct addrinfo* ai_next;
+
+};
+
+
+
 // Funções de protocolo
 int send_udp_message(int sockfd, const char* message, 
                      struct sockaddr_in* addr, socklen_t addrlen);

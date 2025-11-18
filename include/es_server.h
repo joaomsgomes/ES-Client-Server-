@@ -4,6 +4,15 @@
 #include <netinet/in.h>
 #include <stdbool.h>
 
+
+
+
+#define MYPORT 58000
+#define NI_MAXHOST 1025
+#define NI_MAXSERV 32
+#define AI_PASSIVE 0x0001
+#define AI_NUMERICSERV 58001
+
 #define MAX_USERS 1000
 #define MAX_EVENTS 999
 #define MAX_RESERVATIONS 10000
@@ -12,8 +21,10 @@
 #define EVENT_NAME_LEN 10
 #define FILENAME_LEN 24
 #define MAX_FILE_SIZE 10000000 // 10 MB
+#define ARRAY_SIZE 128
 
 // Estruturas de dados
+
 typedef struct {
     char uid[UID_LEN + 1];
     char password[PASSWORD_LEN + 1];

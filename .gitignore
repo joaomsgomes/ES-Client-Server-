@@ -1,8 +1,6 @@
 # Compiled files
 *.o
 *.out
-server
-client
 
 # IDE
 .vscode/

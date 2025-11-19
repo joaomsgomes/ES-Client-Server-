@@ -2,6 +2,7 @@
 #define PROTOCOL_H
 
 #include <stddef.h>
+#include <stdbool.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 
@@ -55,20 +56,14 @@
 #define STATUS_NID "NID"
 
 // Data Structures for Messages
+// (struct addrinfo já está definida em <netdb.h>)
 
-struct addrinfo{
-
-    int ai_flags;
-    int ai_family;
-    int ai_socktype;
-    int ai_protocol;
-    socklen_t ai_addrlen;
-    struct sockaddr* ai_addr;
-    char* ai_canonname;
-    struct addrinfo* ai_next;
-
-};
-
+typedef enum {
+    CMD_TYPE_UNKNOWN = 0,
+    CMD_TYPE_LOGIN,
+    CMD_TYPE_HELP,
+    CMD_TYPE_EXIT
+} CommandType;
 
 
 // Funções de protocolo

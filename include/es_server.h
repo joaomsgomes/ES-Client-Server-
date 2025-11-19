@@ -7,11 +7,7 @@
 
 
 
-#define MYPORT 58000
-#define NI_MAXHOST 1025
-#define NI_MAXSERV 32
-#define AI_PASSIVE 0x0001
-#define AI_NUMERICSERV 58001
+#define MYPORT "58000"
 
 #define MAX_USERS 1000
 #define MAX_EVENTS 999
@@ -62,12 +58,11 @@ void* udp_server_thread(void* arg);
 void* tcp_server_thread(void* arg);
 
 // Gestão de utilizadores
+void init_user_system();
+bool validate_uid(const char* uid);
+bool validate_password(const char* password);
 bool register_user(const char* uid, const char* password);
-bool authenticate_user(const char* uid, const char* password);
-bool login_user(const char* uid);
-bool logout_user(const char* uid);
-bool unregister_user(const char* uid);
-bool change_password(const char* uid, const char* old_pass, const char* new_pass);
+int authenticate_user(const char* uid, const char* password);  // Returns: 1=OK, 0=not exists, -1=wrong password
 
 // Gestão de eventos
 int create_event(const char* uid, const char* name, const char* date, 

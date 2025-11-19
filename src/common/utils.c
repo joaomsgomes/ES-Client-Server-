@@ -3,6 +3,14 @@
 #include <ctype.h>
 #include <time.h>
 
+
+void show_help() {
+    printf("\nAvailable commands:\n");
+    printf("  login UID password  - Login with 6-digit UID and 8-char password\n");
+    printf("  help                - Show this help message\n");
+    printf("  exit                - Exit application\n\n");
+}
+
 bool validate_uid(const char* uid) {
     if (!uid || strlen(uid) != 6) return false;
     for (int i = 0; i < 6; i++) {

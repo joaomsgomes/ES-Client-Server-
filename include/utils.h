@@ -16,6 +16,12 @@ bool validate_seats(int seats);
 bool validate_eid(int eid);
 bool validate_num_people(int people);
 
+// ============ CONSTANTS ============
+
+#define MAX_BUFFER_SIZE 65536
+#define MAX_PATH_LENGTH 256
+#define MAX_COMMAND_LENGTH 512
+
 
 // ============ DATE FUNCTIONS ============
 
@@ -48,10 +54,9 @@ void print_error(const char* function_name, const char* message);
 void debug_print(const char* format, ...);
 
 
-// ============ CONSTANTS ============
+// ============ USER INTERFACE ============
 
-#define MAX_BUFFER_SIZE 65536
-#define MAX_PATH_LENGTH 256
-#define MAX_COMMAND_LENGTH 512
+void show_help();
+
 
 #endif // UTILS_H

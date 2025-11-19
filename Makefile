@@ -8,20 +8,16 @@ BUILD_DIR = build
 INCLUDE_DIR = include
 
 # Ficheiros fonte
-SERVER_SRCS = $(SRC_DIR)/server/es_server.c \
-              $(SRC_DIR)/server/es_udp.c \
-              $(SRC_DIR)/server/es_tcp.c \
-              $(SRC_DIR)/server/es_database.c \
+SERVER_SRCS = $(SRC_DIR)/server/ES.c \
+              $(SRC_DIR)/server/user_management.c \
+              $(SRC_DIR)/server/udp_handlers.c \
               $(SRC_DIR)/common/protocol.c \
               $(SRC_DIR)/common/utils.c \
               $(SRC_DIR)/common/file_transfer.c
 
-CLIENT_SRCS = $(SRC_DIR)/client/user_client.c \
-              $(SRC_DIR)/client/user_commands.c \
-              $(SRC_DIR)/client/user_interface.c \
+CLIENT_SRCS = $(SRC_DIR)/client/user.c \
               $(SRC_DIR)/common/protocol.c \
-              $(SRC_DIR)/common/utils.c \
-              $(SRC_DIR)/common/file_transfer.c
+              $(SRC_DIR)/common/utils.c
 
 # Ficheiros objeto
 SERVER_OBJS = $(SERVER_SRCS:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
@@ -36,26 +32,26 @@ CLIENT = user
 all: dirs $(SERVER) $(CLIENT)
 
 dirs:
-    @mkdir -p $(BUILD_DIR)/server
-    @mkdir -p $(BUILD_DIR)/client
-    @mkdir -p $(BUILD_DIR)/common
+	@mkdir -p $(BUILD_DIR)/server
+	@mkdir -p $(BUILD_DIR)/client
+	@mkdir -p $(BUILD_DIR)/common
 
 $(SERVER): $(SERVER_OBJS)
-    $(CC) $(LDFLAGS) -o $@ $^
+	$(CC) $(LDFLAGS) -o $@ $^
 
 $(CLIENT): $(CLIENT_OBJS)
-    $(CC) $(LDFLAGS) -o $@ $^
+	$(CC) $(LDFLAGS) -o $@ $^
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
-    @mkdir -p $(dir $@)
-    $(CC) $(CFLAGS) -c $< -o $@
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-    rm -rf $(BUILD_DIR) $(SERVER) $(CLIENT)
-    rm -rf data/events/* data/users/*
+	rm -rf $(BUILD_DIR) $(SERVER) $(CLIENT)
+	rm -rf data/events/* data/users/*
 
 run_server: $(SERVER)
-    ./$(SERVER) -p 58001 -v
+	./$(SERVER) -p 58001 -v
 
 run_client: $(CLIENT)
-    ./$(CLIENT) -n 127.0.0.1 -p 58001
+	./$(CLIENT) -n 127.0.0.1 -p 58001

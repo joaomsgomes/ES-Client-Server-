@@ -11,15 +11,13 @@
 #include <signal.h>
 #include "../../include/es_server.h"
 #include "../../include/protocol.h"
+#include "../../include/user_management.h"
+#include "../../include/udp_handlers.h"
 
 #include <sys/types.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
-
-// Forward declarations
-void init_user_system();
-void handle_login(int sockfd, char* message, struct sockaddr_in* client_addr, socklen_t addrlen);
 
 int main(void) {
 

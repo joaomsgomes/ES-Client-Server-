@@ -5,12 +5,8 @@
 #include <netinet/in.h>
 #include "../../include/es_server.h"
 #include "../../include/protocol.h"
-
-// Declarações externas das funções de user_management.c
-extern bool validate_uid(const char* uid);
-extern bool validate_password(const char* password);
-extern bool register_user(const char* uid, const char* password);
-extern int authenticate_user(const char* uid, const char* password);
+#include "../../include/user_management.h"
+#include "../../include/utils.h"
 
 /**
  * Processa comando LOGIN recebido via UDP

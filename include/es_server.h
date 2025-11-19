@@ -57,13 +57,6 @@ void init_server(int port, bool verbose);
 void* udp_server_thread(void* arg);
 void* tcp_server_thread(void* arg);
 
-// Gestão de utilizadores
-void init_user_system();
-bool validate_uid(const char* uid);
-bool validate_password(const char* password);
-bool register_user(const char* uid, const char* password);
-int authenticate_user(const char* uid, const char* password);  // Returns: 1=OK, 0=not exists, -1=wrong password
-
 // Gestão de eventos
 int create_event(const char* uid, const char* name, const char* date, 
                  int seats, const char* filename, const char* filedata, long filesize);

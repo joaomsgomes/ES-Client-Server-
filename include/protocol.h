@@ -76,11 +76,4 @@ int receive_tcp_message(int sockfd, char* buffer, size_t size);
 int send_file_tcp(int sockfd, const char* filename, long filesize);
 int receive_file_tcp(int sockfd, const char* filename, long filesize);
 
-// Validação
-bool validate_uid(const char* uid);
-bool validate_password(const char* password);
-bool validate_event_name(const char* name);
-bool validate_date(const char* date);
-bool validate_filename(const char* filename);
-
 #endif

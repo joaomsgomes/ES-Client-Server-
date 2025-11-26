@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <sys/stat.h>
 #include "../../include/es_server.h"
+#include "../../include/user_management.h"
 #include "../../include/utils.h"
 
 #define USER_DATA_DIR "USERS"

@@ -54,11 +54,11 @@ int main(void) {
     if((errcode=getaddrinfo(NULL,MYPORT,&hints,&res))!=0)
         exit(1);// On error
 
-    ufd=socket(res->ai_family,res->ai_socktype,res->ai_protocol);
+    ufd = socket(res->ai_family,res->ai_socktype,res->ai_protocol);
     if(ufd==-1)
         exit(1);
 
-    if(bind(ufd,res->ai_addr,res->ai_addrlen)==-1)
+    if(bind(ufd, res->ai_addr, res->ai_addrlen)==-1)
     {
         sprintf(prt_str,"Bind error UDP server\n");
         write(1,prt_str,strlen(prt_str));
@@ -95,10 +95,7 @@ int main(void) {
     FD_SET(ufd, &inputs); // Set UDP channel on
     FD_SET(tfd, &inputs); // Set TCP channel on
 
-    //    printf("Size of fd_set: %d\n",sizeof(fd_set));    
-    //    printf("Value of FD_SETSIZE: %d\n",FD_SETSIZE);
-
-    max_fd=ufd;
+    max_fd = tfd; // REVER --> Pode prejudicar o funcionamento do TCP Channel
 
     while(1)
     {

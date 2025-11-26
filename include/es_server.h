@@ -59,6 +59,7 @@ void* tcp_server_thread(void* arg);
 
 // Gestão de utilizadores
 void init_user_system();
+void cleanup_user_system();
 bool validate_uid(const char* uid);
 bool validate_password(const char* password);
 bool register_user(const char* uid, const char* password);

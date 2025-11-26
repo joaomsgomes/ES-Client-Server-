@@ -1,3 +1,6 @@
+# Makefile para ES Server com SQLite
+# Use: make -f Makefile.sqlite
+
 CC = gcc
 CFLAGS = -Wall -Wextra -pthread -I./include -g
 LDFLAGS = -pthread -lsqlite3
@@ -7,7 +10,7 @@ SRC_DIR = src
 BUILD_DIR = build
 INCLUDE_DIR = include
 
-# Ficheiros fonte - USANDO SQLite por padrão
+# Ficheiros fonte - USA user_database.c em vez de user_management.c
 SERVER_SRCS = $(SRC_DIR)/server/ES.c \
               $(SRC_DIR)/server/user_database.c \
               $(SRC_DIR)/server/udp_handlers.c \
@@ -38,7 +41,7 @@ dirs:
 
 $(SERVER): $(SERVER_OBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
-	@echo "✓ ES Server compiled with SQLite"
+	@echo "✓ ES Server compiled with SQLite support"
 
 $(CLIENT): $(CLIENT_OBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
@@ -55,24 +58,33 @@ cleandb:
 	rm -f es_server.db
 	@echo "Database removed"
 
-cleanall: clean cleandb
-	rm -rf USERS/
-	@echo "All data cleaned"
-
 run_server: $(SERVER)
 	./$(SERVER)
 
 run_client: $(CLIENT)
 	./$(CLIENT) -n 127.0.0.1 -p 58000
 
-# Database queries
-listusers:
-	@./db_queries.sh users
-
-checkdb:
-	@./db_queries.sh check
-
+# Migrar dados de USERS/ para SQLite
 migrate:
-	@./db_queries.sh migrate
+	@echo "Migrating users from USERS/ to SQLite..."
+	@if [ -d "USERS" ]; then \
+		sqlite3 es_server.db "CREATE TABLE IF NOT EXISTS users (uid TEXT PRIMARY KEY, password TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);"; \
+		for file in USERS/*_pass.txt; do \
+			if [ -f "$$file" ]; then \
+				uid=$$(basename $$file _pass.txt); \
+				password=$$(cat $$file | tr -d '\n'); \
+				sqlite3 es_server.db "INSERT OR IGNORE INTO users (uid, password) VALUES ('$$uid', '$$password');"; \
+				echo "  Migrated user: $$uid"; \
+			fi \
+		done; \
+		echo "Migration complete!"; \
+	else \
+		echo "No USERS/ directory found. Nothing to migrate."; \
+	fi
 
-.PHONY: cleandb cleanall listusers checkdb migrate
+# Ver utilizadores na base de dados
+listusers:
+	@echo "Users in database:"
+	@sqlite3 es_server.db "SELECT uid, password, created_at FROM users;" || echo "No database found"
+
+.PHONY: migrate listusers cleandb

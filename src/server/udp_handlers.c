@@ -24,6 +24,7 @@ extern int authenticate_user(const char* uid, const char* password);
  *   "RLI ERR\n" - Erro de formato/sintaxe
  */
 void handle_login(int sockfd, char* message, struct sockaddr_in* client_addr, socklen_t addrlen) {
+    
     char cmd[4], uid[UID_LEN + 1], password[PASSWORD_LEN + 1];
     char response[32];
     

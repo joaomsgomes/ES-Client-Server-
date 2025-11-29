@@ -31,6 +31,7 @@ void init_user_system() {
         "CREATE TABLE IF NOT EXISTS users ("
         "   uid TEXT PRIMARY KEY NOT NULL,"
         "   password TEXT NOT NULL,"
+        "   is_logged_in INTEGER DEFAULT 0,"
         "   created_at DATETIME DEFAULT CURRENT_TIMESTAMP"
         ");";
     
@@ -181,3 +182,93 @@ void cleanup_user_system() {
         printf("[CLEANUP] Database connection closed\n");
     }
 }
+
+/**
+ * Marca um utilizador como logged in
+ * Retorna true se conseguiu, false se houve erro
+ */
+bool login_user(const char* uid) {
+    // 1. Declarar variáveis
+    sqlite3_stmt *stmt;
+    
+    // 2. Query SQL - UPDATE para marcar como logged in (1)
+    const char *sql = "UPDATE users SET is_logged_in = 1 WHERE uid = ?;";
+    
+    // 3. Preparar o statement
+    int rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Failed to prepare statement: %s\n", sqlite3_errmsg(db));
+        return false;
+    }
+    
+    // 4. Bind - substituir o ? pelo uid
+    sqlite3_bind_text(stmt, 1, uid, -1, SQLITE_STATIC);
+    
+    // 5. Executar
+    rc = sqlite3_step(stmt);
+    
+    // 6. Limpar SEMPRE (mesmo se falhar)
+    sqlite3_finalize(stmt);
+    
+    // 7. Verificar resultado
+    if (rc == SQLITE_DONE) {
+        printf("[USER] User %s logged in\n", uid);
+        return true;
+    }
+    
+    return false;
+}
+
+
+/**
+ * Marca um utilizador como logged out
+ * Retorna true se conseguiu, false se houve erro
+ */
+bool logout_user(const char* uid) {
+    sqlite3_stmt *stmt;
+    const char *sql = "UPDATE users SET is_logged_in = 0 WHERE uid = ?;";
+
+    int rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Failed to prepare statement: %s\n", sqlite3_errmsg(db));
+        return false;
+    }
+
+    sqlite3_bind_text(stmt, 1, uid, -1, SQLITE_STATIC);
+
+    rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    if (rc == SQLITE_DONE) {
+        printf("[USER] User %s logged out\n", uid);
+        return true;
+    }
+
+    return false;
+}
+
+
+
+/**
+ * Verifica se um utilizador está logged in
+ */
+int is_user_logged_in(const char* uid) {
+    sqlite3_stmt *stmt;
+    const char *sql = "SELECT is_logged_in FROM users WHERE uid = ?;";
+    
+    int rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Failed to prepare statement: %s\n", sqlite3_errmsg(db));
+        return -1;
+    }
+    
+    sqlite3_bind_text(stmt, 1, uid, -1, SQLITE_STATIC);
+    
+    int is_logged_in = -1;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        is_logged_in = sqlite3_column_int(stmt, 0);
+    }
+    
+    sqlite3_finalize(stmt);
+    return is_logged_in;
+}
+

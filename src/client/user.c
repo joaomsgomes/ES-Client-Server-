@@ -122,6 +122,7 @@ void cmd_login(const char* uid, const char* password) {
     if (strcmp(status, STATUS_OK) == 0) {
         strcpy(client_state.logged_uid, uid);
         strcpy(client_state.logged_password, password);
+        strcpy(client_state.logged_password, password);
         client_state.is_logged_in = true;
         printf("Login successful\n");
         
@@ -140,6 +141,86 @@ void cmd_login(const char* uid, const char* password) {
     } else {
         printf("Unknown response: %s\n", response);
     }
+}
+
+void cmd_logout() {
+    char message[64];
+    char response[64];
+
+    snprintf(message, sizeof(message), "%s %s %s\n", 
+             CMD_LOGOUT, client_state.logged_uid, client_state.logged_password);
+    
+    if (!send_udp_receive_response(message, response, sizeof(response))) {
+        printf("Error: Communication with server failed\n");
+        return;
+    }
+
+    char rsp_code[4], status[4];
+    if (sscanf(response, "%3s %3s", rsp_code, status) != 2) {
+        printf("Error: Invalid response format\n");
+        return;
+    }
+
+    if (strcmp(status, STATUS_OK) == 0) {
+        client_state.is_logged_in = false;
+        printf("Successful logout\n");
+        
+    } else if (strcmp(status, STATUS_NOK) == 0) {
+        printf("Error: User not logged in\n");
+        
+    } else if (strcmp(status, STATUS_UNR) == 0) {
+        printf("Error: User not registered\n");
+        
+    } else if (strcmp(status, STATUS_WRP) == 0) {
+        printf("Error: Wrong password\n");
+
+    } else if (strcmp(status, STATUS_ERR) == 0) {
+    printf("Error: Invalid request format\n");
+        
+    } else {
+        printf("Unknown response: %s\n", response);
+    }
+
+}
+
+void cmd_logout() {
+    char message[64];
+    char response[64];
+
+    snprintf(message, sizeof(message), "%s %s %s\n", 
+             CMD_LOGOUT, client_state.logged_uid, client_state.logged_password);
+    
+    if (!send_udp_receive_response(message, response, sizeof(response))) {
+        printf("Error: Communication with server failed\n");
+        return;
+    }
+
+    char rsp_code[4], status[4];
+    if (sscanf(response, "%3s %3s", rsp_code, status) != 2) {
+        printf("Error: Invalid response format\n");
+        return;
+    }
+
+    if (strcmp(status, STATUS_OK) == 0) {
+        client_state.is_logged_in = false;
+        printf("Successful logout\n");
+        
+    } else if (strcmp(status, STATUS_NOK) == 0) {
+        printf("Error: User not logged in\n");
+        
+    } else if (strcmp(status, STATUS_UNR) == 0) {
+        printf("Error: User not registered\n");
+        
+    } else if (strcmp(status, STATUS_WRP) == 0) {
+        printf("Error: Wrong password\n");
+
+    } else if (strcmp(status, STATUS_ERR) == 0) {
+    printf("Error: Invalid request format\n");
+        
+    } else {
+        printf("Unknown response: %s\n", response);
+    }
+
 }
 
 
@@ -345,6 +426,7 @@ void cmd_create(const char* name, const char* event_fname, const char* event_dat
 CommandType parse_command_type(const char* command) {
     if (strcmp(command, "login") == 0) return CMD_TYPE_LOGIN;
     if (strcmp(command, "create") == 0) return CMD_TYPE_CREATE;
+    if (strcmp(command, "logout") == 0) return CMD_TYPE_LOGOUT;
     if (strcmp(command, "help") == 0) return CMD_TYPE_HELP;
     if (strcmp(command, "exit") == 0 || strcmp(command, "quit") == 0) return CMD_TYPE_EXIT;
     return CMD_TYPE_UNKNOWN;
@@ -406,7 +488,13 @@ int main(int argc, char *argv[]) {
                     printf("Usage: login UID password\n");
                 }
                 break;
-                
+            case CMD_TYPE_LOGOUT:
+                if (parsed == 1) {
+                    cmd_logout();
+                } else {
+                    printf("Usage: logout\n");
+                }
+                break;
             case CMD_TYPE_CREATE:
                 if (parsed == 5) {
                     int num_attendees = atoi(arg4);

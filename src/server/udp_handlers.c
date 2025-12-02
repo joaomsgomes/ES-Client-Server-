@@ -50,6 +50,7 @@ void handle_login(int sockfd, char* message, struct sockaddr_in* client_addr, so
     
     if (auth_result == 1) {
         // Utilizador existe e password correta
+        login_user(uid);
         snprintf(response, sizeof(response), "%s %s\n", RSP_LOGIN, STATUS_OK);
         sendto(sockfd, response, strlen(response), 0, 
                (struct sockaddr*)client_addr, addrlen);
@@ -58,6 +59,7 @@ void handle_login(int sockfd, char* message, struct sockaddr_in* client_addr, so
     } else if (auth_result == 0) {
         // Utilizador não existe - registar novo utilizador
         if (register_user(uid, password)) {
+            login_user(uid);
             snprintf(response, sizeof(response), "%s %s\n", RSP_LOGIN, STATUS_REG);
             sendto(sockfd, response, strlen(response), 0, 
                    (struct sockaddr*)client_addr, addrlen);
@@ -76,4 +78,71 @@ void handle_login(int sockfd, char* message, struct sockaddr_in* client_addr, so
                (struct sockaddr*)client_addr, addrlen);
         printf("[UDP] LOGIN: Wrong password for user %s\n", uid);
     }
+}
+
+void handle_logout(int sockfd, char* message, struct sockaddr_in* client_addr, socklen_t addrlen) {
+    
+    char cmd[4], uid[UID_LEN + 1], password[PASSWORD_LEN + 1];
+    char response[32];
+    
+    // Parse: "LOU UID password\n"
+    int parsed = sscanf(message, "%3s %6s %8s", cmd, uid, password);
+
+    if (parsed != 3) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_LOGOUT, STATUS_ERR);
+        sendto(sockfd, response, strlen(response), 0, 
+               (struct sockaddr*)client_addr, addrlen);
+        printf("[UDP] LOGOUT: Invalid format\n");
+        return;
+    }
+
+    if (!validate_uid(uid) || !validate_password(password)) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_LOGOUT, STATUS_ERR);
+        sendto(sockfd, response, strlen(response), 0, 
+               (struct sockaddr*)client_addr, addrlen);
+        printf("[UDP] LOGOUT: Invalid UID or password format (UID=%s)\n", uid);
+        return;
+    }
+
+    int auth_result = authenticate_user(uid, password);
+
+    if (auth_result == 0) {
+        // User não existe → UNR
+        snprintf(response, sizeof(response), "%s %s\n", RSP_LOGOUT, STATUS_UNR);
+        sendto(sockfd, response, strlen(response), 0, 
+            (struct sockaddr*)client_addr, addrlen);
+        printf("[UDP] LOGOUT: User %s not registered\n", uid);
+        return;
+    }
+
+    if (auth_result == -1) {
+        // Password errada → WRP
+        snprintf(response, sizeof(response), "%s %s\n", RSP_LOGOUT, STATUS_WRP);
+        sendto(sockfd, response, strlen(response), 0, 
+            (struct sockaddr*)client_addr, addrlen);
+        printf("[UDP] LOGOUT: Wrong password for user %s\n", uid);
+        return;
+    }
+
+    int logged_status = is_user_logged_in(uid);
+    if (logged_status == 1) {
+        if (logout_user(uid)) {
+            snprintf(response, sizeof(response), "%s %s\n", RSP_LOGOUT, STATUS_OK);
+            sendto(sockfd, response, strlen(response), 0, 
+                (struct sockaddr*)client_addr, addrlen);
+            printf("[UDP] LOGOUT: User %s logged out successfully\n", uid);
+        } else {
+            snprintf(response, sizeof(response), "%s %s\n", RSP_LOGOUT, STATUS_ERR);
+            sendto(sockfd, response, strlen(response), 0, 
+                (struct sockaddr*)client_addr, addrlen);
+            printf("[UDP] LOGOUT: Failed to logout user %s\n", uid);
+        }
+    } else {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_LOGOUT, STATUS_NOK);
+        sendto(sockfd, response, strlen(response), 0, 
+                (struct sockaddr*)client_addr, addrlen);
+        printf("[UDP] LOGOUT: User %s is not logged in\n", uid);
+    }
+    
+
 }

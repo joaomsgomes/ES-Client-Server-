@@ -62,6 +62,8 @@ typedef enum {
     CMD_TYPE_UNKNOWN = 0,
     CMD_TYPE_LOGIN,
     CMD_TYPE_CREATE,
+    CMD_TYPE_LOGOUT,
+    CMD_TYPE_UNREGISTER,
     CMD_TYPE_HELP,
     CMD_TYPE_EXIT
 } CommandType;

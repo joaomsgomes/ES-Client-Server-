@@ -3,37 +3,38 @@
 
 #include <stdbool.h>
 
-#define BUFFER_SIZE 65536
-#define CMD_BUFFER 256
+/**
+ * User Client Module
+ * 
+ * Cliente para comunicação com o Event Server (ES)
+ * Cada instância do programa `./user` representa UM utilizador
+ * O estado do cliente é mantido internamente como variável global estática
+ * 
+ * Para múltiplos utilizadores, execute múltiplas instâncias do programa:
+ *   Terminal 1: ./user -n 127.0.0.1 -p 58000
+ *   Terminal 2: ./user -n 127.0.0.1 -p 58000
+ */
 
-// Estado do cliente
-typedef struct {
-    char uid[7];
-    char password[9];
-    bool logged_in;
-    char server_ip[16];
-    int server_port;
-    int udp_socket;
-} ClientState;
+// ===== INICIALIZAÇÃO =====
+bool init_udp_connection(const char* server_ip, const char* server_port);
 
-// Comandos disponíveis
-void cmd_login(ClientState* state, const char* uid, const char* password);
-void cmd_logout(ClientState* state);
-void cmd_unregister(ClientState* state);
-void cmd_change_password(ClientState* state, const char* old_pass, const char* new_pass);
-void cmd_create_event(ClientState* state, const char* name, const char* filename, 
+// ===== COMANDOS UDP =====
+void cmd_login(const char* uid, const char* password);
+void cmd_logout(void);
+void cmd_unregister(const char* uid, const char* password);
+void cmd_my_events(void);
+void cmd_my_reservations(void);
+
+// ===== COMANDOS TCP (a implementar) =====
+void cmd_change_password(const char* old_pass, const char* new_pass);
+void cmd_create_event(const char* name, const char* filename, 
                       const char* date, int seats);
-void cmd_close_event(ClientState* state, int eid);
-void cmd_list_events(ClientState* state);
-void cmd_my_events(ClientState* state);
-void cmd_show_event(ClientState* state, int eid);
-void cmd_reserve(ClientState* state, int eid, int num_people);
-void cmd_my_reservations(ClientState* state);
-void cmd_exit(ClientState* state);
+void cmd_close_event(int eid);
+void cmd_list_events(void);
+void cmd_show_event(int eid);
+void cmd_reserve(int eid, int num_people);
 
-// Funções auxiliares
-void init_client(ClientState* state, const char* ip, int port);
-void parse_command(ClientState* state, const char* command);
-void display_help();
+// ===== FUNÇÕES AUXILIARES =====
+void show_help(void);
 
-#endif
+#endif // USER_CLIENT_H

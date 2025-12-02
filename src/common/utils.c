@@ -5,10 +5,26 @@
 
 
 void show_help() {
-    printf("\nAvailable commands:\n");
-    printf("  login UID password  - Login with 6-digit UID and 8-char password\n");
-    printf("  help                - Show this help message\n");
-    printf("  exit                - Exit application\n\n");
+    printf("\n╔═══════════════════════════════════════════════════════════════╗\n");
+    printf("║                    ES CLIENT - Commands                      ║\n");
+    printf("╠═══════════════════════════════════════════════════════════════╣\n");
+    printf("║  login UID password                                          ║\n");
+    printf("║    - Login with 6-digit UID and 8-char password              ║\n");
+    printf("║                                                               ║\n");
+    printf("║  create name event_fname event_date num_attendees            ║\n");
+    printf("║    - Create event (requires login)                           ║\n");
+    printf("║    - name: max 10 alphanumeric characters                    ║\n");
+    printf("║    - event_fname: file with event description (max 10MB)     ║\n");
+    printf("║    - event_date: format dd-mm-yyyy                           ║\n");
+    printf("║    - num_attendees: between 10 and 999                       ║\n");
+    printf("║    Example: create Concert poster.jpg 31-12-2025 500         ║\n");
+    printf("║                                                               ║\n");
+    printf("║  help                                                         ║\n");
+    printf("║    - Show this help message                                  ║\n");
+    printf("║                                                               ║\n");
+    printf("║  exit                                                         ║\n");
+    printf("║    - Exit application                                        ║\n");
+    printf("╚═══════════════════════════════════════════════════════════════╝\n\n");
 }
 
 bool validate_uid(const char* uid) {

@@ -13,6 +13,7 @@
 #include "../../include/protocol.h"
 #include "../../include/user_management.h"
 #include "../../include/udp_handlers.h"
+#include "../../include/tcp_handlers.h"
 
 #include <sys/types.h>
 #include <sys/select.h>
@@ -65,8 +66,9 @@ int main(void) {
     if(res!=NULL)
         freeaddrinfo(res);
 
-    // Inicializar sistema de utilizadores
+    // Inicializar sistema de utilizadores e eventos
     init_user_system();
+    init_event_system();
     printf("ES Server started on UDP port %s\n", MYPORT);
 
     // TCP SETUP AND SERVER SECTION
@@ -152,17 +154,48 @@ int main(void) {
                         }
                     }
                 }
-                // Input done by TCP socket 
-
-                //REVER ANTES DE CONTINUAR
-                
+                // Input done by TCP socket (listening socket)
                 if(FD_ISSET(tfd,&testfds)) {
                     addrlen = sizeof(_useraddr);
-                    ret = accept(tfd, (struct sockaddr *)&_useraddr, &addrlen);
-                    if(ret>0) {
-                        printf("New TCP connection: fd=%d\n", ret);
-                        FD_SET(ret, &inputs);  // Adicionar ao select!
-                        if(ret > max_fd) max_fd = ret;
+                    int client_fd = accept(tfd, (struct sockaddr *)&_useraddr, &addrlen);
+                    if(client_fd > 0) {
+                        errcode=getnameinfo((struct sockaddr *) &_useraddr, addrlen, 
+                                          host, sizeof(host), service, sizeof(service), 0);
+                        if(errcode==0)
+                            printf("[TCP] New connection from [%s:%s] fd=%d\n", host, service, client_fd);
+                        
+                        // Ler comando TCP (buffer grande para ficheiros)
+                        char *tcp_buffer = malloc(MAX_FILE_SIZE + 1024); // Espaço para comando + ficheiro
+                        if (!tcp_buffer) {
+                            printf("[TCP] ERROR: Memory allocation failed\n");
+                            close(client_fd);
+                        } else {
+                            ssize_t bytes_read = recv(client_fd, tcp_buffer, MAX_FILE_SIZE + 1024, 0);
+                            
+                            if (bytes_read > 0) {
+                                tcp_buffer[bytes_read] = '\0'; // Null terminate (apenas para debug)
+                                printf("[TCP] Received %zd bytes\n", bytes_read);
+                                
+                                // Identificar comando (primeiros 3 caracteres)
+                                if (bytes_read >= 3) {
+                                    if (strncmp(tcp_buffer, CMD_CREATE, 3) == 0) {
+                                        handle_create_event(client_fd, tcp_buffer, bytes_read);
+                                    }
+                                } else {
+                                    printf("[TCP] Invalid command (too short)\n");
+                                }
+                            } else if (bytes_read == 0) {
+                                printf("[TCP] Client closed connection\n");
+                            } else {
+                                perror("[TCP] recv error");
+                            }
+                            
+                            free(tcp_buffer);
+                        }
+                        
+                        // Fechar conexão (protocolo request-response simples)
+                        close(client_fd);
+                        printf("[TCP] Connection closed: fd=%d\n", client_fd);
                     }
                 }
 

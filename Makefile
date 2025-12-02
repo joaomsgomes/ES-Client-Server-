@@ -10,6 +10,8 @@ INCLUDE_DIR = include
 # Ficheiros fonte - USANDO SQLite por padrão
 SERVER_SRCS = $(SRC_DIR)/server/ES.c \
               $(SRC_DIR)/server/user_database.c \
+              $(SRC_DIR)/server/event_database.c \
+              $(SRC_DIR)/server/tcp_handlers.c \
               $(SRC_DIR)/server/udp_handlers.c \
               $(SRC_DIR)/common/protocol.c \
               $(SRC_DIR)/common/utils.c \
@@ -67,12 +69,19 @@ run_client: $(CLIENT)
 
 # Database queries
 listusers:
-	@./db_queries.sh users
+	@echo "=== Users in Database ==="
+	@sqlite3 es_server.db "SELECT uid, created_at FROM users;" 2>/dev/null || echo "No database found or no users"
+
+listevents:
+	@echo "=== Events in Database ==="
+	@sqlite3 es_server.db "SELECT eid, uid, name, date, total_seats, reserved_seats, filename, file_size, state FROM events ORDER BY eid;" 2>/dev/null || echo "No database found or no events"
+
+eventdetails:
+	@echo "=== Event Details (with formatting) ==="
+	@sqlite3 es_server.db -column -header "SELECT eid AS 'EID', name AS 'Name', date AS 'Date', total_seats AS 'Seats', reserved_seats AS 'Reserved', filename AS 'File', file_size AS 'Size(bytes)', CASE state WHEN 1 THEN 'ACTIVE' WHEN 0 THEN 'PAST' WHEN 2 THEN 'SOLD_OUT' WHEN 3 THEN 'CLOSED' END AS 'State' FROM events ORDER BY eid;" 2>/dev/null || echo "No database found"
 
 checkdb:
-	@./db_queries.sh check
+	@echo "=== Database Statistics ==="
+	@sqlite3 es_server.db "SELECT 'Users: ' || COUNT(*) FROM users; SELECT 'Events: ' || COUNT(*) FROM events;" 2>/dev/null || echo "No database found"
 
-migrate:
-	@./db_queries.sh migrate
-
-.PHONY: cleandb cleanall listusers checkdb migrate
+.PHONY: cleandb cleanall listusers listevents eventdetails checkdb run_server run_client

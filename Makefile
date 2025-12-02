@@ -1,14 +1,15 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -pthread -I./include -g
-LDFLAGS = -pthread -lsqlite3
+LDFLAGS = -pthread
 
 # Diretórios
 SRC_DIR = src
 BUILD_DIR = build
 INCLUDE_DIR = include
 
-# Ficheiros fonte - USANDO SQLite por padrão
+# Ficheiros fonte - USANDO sistema de ficheiros
 SERVER_SRCS = $(SRC_DIR)/server/ES.c \
+              $(SRC_DIR)/server/file_system.c \
               $(SRC_DIR)/server/user_database.c \
               $(SRC_DIR)/server/event_database.c \
               $(SRC_DIR)/server/tcp_handlers.c \
@@ -40,7 +41,7 @@ dirs:
 
 $(SERVER): $(SERVER_OBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
-	@echo "✓ ES Server compiled with SQLite"
+	@echo "✓ ES Server compiled (file-based)"
 
 $(CLIENT): $(CLIENT_OBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)

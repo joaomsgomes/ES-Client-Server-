@@ -180,47 +180,6 @@ void cmd_logout() {
     } else {
         printf("Unknown response: %s\n", response);
     }
-
-}
-
-void cmd_logout() {
-    char message[64];
-    char response[64];
-
-    snprintf(message, sizeof(message), "%s %s %s\n", 
-             CMD_LOGOUT, client_state.logged_uid, client_state.logged_password);
-    
-    if (!send_udp_receive_response(message, response, sizeof(response))) {
-        printf("Error: Communication with server failed\n");
-        return;
-    }
-
-    char rsp_code[4], status[4];
-    if (sscanf(response, "%3s %3s", rsp_code, status) != 2) {
-        printf("Error: Invalid response format\n");
-        return;
-    }
-
-    if (strcmp(status, STATUS_OK) == 0) {
-        client_state.is_logged_in = false;
-        printf("Successful logout\n");
-        
-    } else if (strcmp(status, STATUS_NOK) == 0) {
-        printf("Error: User not logged in\n");
-        
-    } else if (strcmp(status, STATUS_UNR) == 0) {
-        printf("Error: User not registered\n");
-        
-    } else if (strcmp(status, STATUS_WRP) == 0) {
-        printf("Error: Wrong password\n");
-
-    } else if (strcmp(status, STATUS_ERR) == 0) {
-    printf("Error: Invalid request format\n");
-        
-    } else {
-        printf("Unknown response: %s\n", response);
-    }
-
 }
 
 

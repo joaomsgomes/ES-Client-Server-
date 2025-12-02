@@ -2,12 +2,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <sqlite3.h>
 #include <netinet/in.h>
 #include "../../include/es_server.h"
 #include "../../include/protocol.h"
 #include "../../include/user_management.h"
 #include "../../include/utils.h"
+#include "../../include/file_system.h"
 
 
 
@@ -149,26 +149,14 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
     ev.filedata = filedata;
     ev.state = 1; // EVENT_ACTIVE
     
-    // Criar evento na base de dados
-    sqlite3 *db = NULL;
-    int rc = sqlite3_open(DB_FILE, &db);
+    // Criar evento no sistema de ficheiros
+    int rc = create_event(&ev);
     
-    if (rc != SQLITE_OK) {
+    if (rc != 0) {
         snprintf(response, sizeof(response), "%s %s\n", RSP_CREATE, STATUS_NOK);
         send(client_fd, response, strlen(response), 0);
         free(filedata);
-        printf("[TCP] CREATE: Database open failed\n");
-        return;
-    }
-    
-    rc = create_event(db, &ev);
-    sqlite3_close(db);
-    
-    if (rc != SQLITE_OK) {
-        snprintf(response, sizeof(response), "%s %s\n", RSP_CREATE, STATUS_NOK);
-        send(client_fd, response, strlen(response), 0);
-        free(filedata);
-        printf("[TCP] CREATE: Database insert failed\n");
+        printf("[TCP] CREATE: Failed to create event\n");
         return;
     }
     
@@ -180,4 +168,77 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
     
     printf("[TCP] CREATE: Event created successfully (EID=%03d, UID=%s, name=%s)\n",
            ev.eid, uid, name);
+}
+
+
+/**
+ * Handler para comando CLOSE
+ * Protocolo: CLS UID password EID\n
+ * Resposta: RCL status\n
+ */
+void handle_close_event(int client_fd, char* buffer, ssize_t n) {
+    (void)n;
+    
+    char cmd[4], uid[UID_LEN + 1], password[PASSWORD_LEN + 1];
+    int eid;
+    char response[64];
+    
+    int parsed = sscanf(buffer, "%3s %6s %8s %d", cmd, uid, password, &eid);
+    
+    if (parsed != 4) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_CLOSE, STATUS_ERR);
+        send(client_fd, response, strlen(response), 0);
+        printf("[TCP] CLOSE: Invalid format\n");
+        return;
+    }
+    
+    if (!validate_uid(uid) || !validate_password(password)) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_CLOSE, STATUS_ERR);
+        send(client_fd, response, strlen(response), 0);
+        return;
+    }
+    
+    if (eid < 1 || eid > 999) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_CLOSE, STATUS_ERR);
+        send(client_fd, response, strlen(response), 0);
+        return;
+    }
+    
+    int auth_result = authenticate_user(uid, password);
+    
+    if (auth_result == 0) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_CLOSE, STATUS_NOK);
+        send(client_fd, response, strlen(response), 0);
+        return;
+    }
+    
+    if (auth_result == -1) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_CLOSE, STATUS_WRP);
+        send(client_fd, response, strlen(response), 0);
+        return;
+    }
+    
+    if (!is_user_logged_in(uid)) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_CLOSE, STATUS_NLG);
+        send(client_fd, response, strlen(response), 0);
+        return;
+    }
+    
+    int close_result = close_event(uid, eid);
+    
+    const char *status;
+    switch (close_result) {
+        case 0:  status = STATUS_OK; break;
+        case -1: status = STATUS_NOE; break;
+        case -2: status = STATUS_CLO; break;
+        case -3: status = STATUS_EOW; break;
+        case 1:  status = STATUS_PST; break;
+        case 2:  status = STATUS_SLD; break;
+        default: status = STATUS_ERR; break;
+    }
+    
+    snprintf(response, sizeof(response), "%s %s\n", RSP_CLOSE, status);
+    send(client_fd, response, strlen(response), 0);
+    
+    printf("[TCP] CLOSE: EID=%03d, UID=%s, status=%s\n", eid, uid, status);
 }

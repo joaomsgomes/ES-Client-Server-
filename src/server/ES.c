@@ -14,6 +14,7 @@
 #include "../../include/user_management.h"
 #include "../../include/udp_handlers.h"
 #include "../../include/tcp_handlers.h"
+#include "../../include/file_system.h"
 
 #include <sys/types.h>
 #include <sys/select.h>
@@ -66,7 +67,8 @@ int main(void) {
     if(res!=NULL)
         freeaddrinfo(res);
 
-    // Inicializar sistema de utilizadores e eventos
+    // Inicializar sistema de ficheiros, utilizadores e eventos
+    init_file_system();
     init_user_system();
     init_event_system();
     printf("ES Server started on UDP port %s\n", MYPORT);

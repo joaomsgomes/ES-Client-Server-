@@ -3,13 +3,11 @@
 
 #include <netinet/in.h>
 #include <stdbool.h>
-#include <sqlite3.h>
 
 
 
 
 #define MYPORT "58000"
-#define DB_FILE "es_server.db"
 
 #define MAX_USERS 1000
 #define MAX_EVENTS 999
@@ -57,9 +55,12 @@ void* tcp_server_thread(void* arg);
 
 // Gestão de eventos
 void init_event_system();
-int create_event(sqlite3 *db, Event *ev);
-bool close_event(const char* uid, int eid);
-int get_event(sqlite3 *db, int eid, Event *ev);
+int create_event(Event *ev);
+int close_event(const char* uid, int eid);
+int get_event(int eid, Event *ev);
+int get_event_state(int eid);
+int is_date_in_past(const char *event_date);
+int is_event_owner(const char *uid, int eid);
 Event** list_all_events(int* count);
 Event** list_user_events(const char* uid, int* count);
 

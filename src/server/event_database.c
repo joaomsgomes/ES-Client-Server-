@@ -2,299 +2,297 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
-#include <sqlite3.h>
+#include <time.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include "../../include/es_server.h"
+#include "../../include/file_system.h"
 #include "../../include/utils.h"
 
-static sqlite3 *db = NULL;
-
-
+/**
+ * Inicializa o sistema de eventos
+ */
 void init_event_system() {
-    int rc;
-    char *err_msg = NULL;
-    
-    // Abrir/criar base de dados
-    rc = sqlite3_open(DB_FILE, &db);
-    if (rc != SQLITE_OK) {
-        fprintf(stderr, "Cannot open database: %s\n", sqlite3_errmsg(db));
-        sqlite3_close(db);
-        exit(1);
-    }
-    
-    // Criar tabela events se não existir
-    const char *sql_create_table =
-        "CREATE TABLE IF NOT EXISTS events ("
-        "  eid INTEGER PRIMARY KEY AUTOINCREMENT,"
-        "  uid TEXT NOT NULL,"
-        "  name TEXT NOT NULL,"
-        "  date TEXT NOT NULL,"          
-        "  total_seats INTEGER NOT NULL,"
-        "  reserved_seats INTEGER DEFAULT 0,"
-        "  filename TEXT NOT NULL,"
-        "  file_size INTEGER NOT NULL,"
-        "  filedata BLOB,"
-        "  state INTEGER DEFAULT 1,"           
-        "  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,"
-        "  FOREIGN KEY(uid) REFERENCES users(uid)"
-        ");";
-    
-    rc = sqlite3_exec(db, sql_create_table, NULL, NULL, &err_msg);
-    if (rc != SQLITE_OK) {
-        fprintf(stderr, "SQL error: %s\n", err_msg);
-        sqlite3_free(err_msg);
-        sqlite3_close(db);
-        exit(1);
-    }
-    
-    printf("[INIT] Event system initialized with SQLite (%s)\n", DB_FILE);
+    printf("[INIT] Event system ready (file-based)\n");
 }
 
-
-int create_event(sqlite3 *db, Event *ev) {
-    if (!db || !ev) return SQLITE_MISUSE;
-
-    int rc;
-    sqlite3_stmt *stmt = NULL;
-
-    const char *sql =
-        "INSERT INTO events ("
-        "  uid, name, date, total_seats,"
-        "  reserved_seats, filename, file_size, filedata, state"
-        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);";
-
-    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
-    if (rc != SQLITE_OK) {
-        fprintf(stderr, "[DB] prepare INSERT events failed: %s\n",
-                sqlite3_errmsg(db));
-        return rc;
-    }
-
-    // 1: uid
-    rc = sqlite3_bind_text(stmt, 1, ev->uid, -1, SQLITE_TRANSIENT);
-    if (rc != SQLITE_OK) goto bind_error;
-
-    // 2: name
-    rc = sqlite3_bind_text(stmt, 2, ev->name, -1, SQLITE_TRANSIENT);
-    if (rc != SQLITE_OK) goto bind_error;
-
-    // 3: date (string "dd-mm-yyyy")
-    rc = sqlite3_bind_text(stmt, 3, ev->date, -1, SQLITE_TRANSIENT);
-    if (rc != SQLITE_OK) goto bind_error;
-
-    // 4: total_seats
-    rc = sqlite3_bind_int(stmt, 4, ev->total_seats);
-    if (rc != SQLITE_OK) goto bind_error;
-
-    // 5: reserved_seats
-    rc = sqlite3_bind_int(stmt, 5, ev->reserved_seats);
-    if (rc != SQLITE_OK) goto bind_error;
-
-    // 6: filename
-    rc = sqlite3_bind_text(stmt, 6, ev->filename, -1, SQLITE_TRANSIENT);
-    if (rc != SQLITE_OK) goto bind_error;
-
-    // 7: file_size
-    rc = sqlite3_bind_int64(stmt, 7, (sqlite3_int64)ev->file_size);
-    if (rc != SQLITE_OK) goto bind_error;
-
-    // 8: filedata (pode ser NULL)
-    if (ev->filedata != NULL && ev->file_size > 0) {
-        rc = sqlite3_bind_blob(stmt, 8, ev->filedata,
-                               (int)ev->file_size, SQLITE_TRANSIENT);
-    } else {
-        rc = sqlite3_bind_null(stmt, 8);
-    }
-    if (rc != SQLITE_OK) goto bind_error;
-
-    // 9: state
-    rc = sqlite3_bind_int(stmt, 9, ev->state);
-    if (rc != SQLITE_OK) goto bind_error;
-
-    // Executar
-    rc = sqlite3_step(stmt);
-    if (rc != SQLITE_DONE) {
-        fprintf(stderr, "[DB] insert event failed: %s\n",
-                sqlite3_errmsg(db));
-        sqlite3_finalize(stmt);
-        return rc;
-    }
-
-    // Buscar eid gerado
-    ev->eid = (int)sqlite3_last_insert_rowid(db);
-
-    sqlite3_finalize(stmt);
-    return SQLITE_OK;
-
-bind_error:
-    fprintf(stderr, "[DB] bind error in create_event: %s\n",
-            sqlite3_errmsg(db));
-    sqlite3_finalize(stmt);
-    return rc;
-}
-
-
-int get_event(sqlite3 *db, int eid, Event *ev) {
-    if (!db || !ev) return SQLITE_MISUSE;
-
-    int rc;
-    sqlite3_stmt *stmt = NULL;
-
+/**
+ * Cria um novo evento
+ * Formato START file: UID name desc_fname total_seats start_date start_time
+ * Exemplo: 123456 Concert poster.jpg 500 31-12-2025 20:00
+ */
+int create_event(Event *ev) {
+    if (!ev) return -1;
     
-    memset(ev, 0, sizeof(*ev));
-    ev->filedata = NULL;
-
-    const char *sql =
-        "SELECT eid, uid, name, event_date, "
-        "       attendance_size, seats_reserved, "
-        "       filename, filesize, filedata, state "
-        "FROM events "
-        "WHERE eid = ?;";
-
-    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
-    if (rc != SQLITE_OK) {
-        fprintf(stderr, "[DB] prepare SELECT event failed: %s\n",
-                sqlite3_errmsg(db));
-        return rc;
+    // Obter próximo EID disponível
+    int eid = get_next_eid();
+    if (eid < 0) {
+        fprintf(stderr, "[EVENT] No more EIDs available\n");
+        return -1;
     }
-
-    // Bind do eid
-    rc = sqlite3_bind_int(stmt, 1, eid);
-    if (rc != SQLITE_OK) {
-        fprintf(stderr, "[DB] bind eid failed: %s\n", sqlite3_errmsg(db));
-        sqlite3_finalize(stmt);
-        return rc;
-    }
-
-    rc = sqlite3_step(stmt);
-
-    if (rc == SQLITE_DONE) {
-        // Não há linha com esse eid
-        sqlite3_finalize(stmt);
-        return SQLITE_NOTFOUND; 
-    }
-
-    if (rc != SQLITE_ROW) {
-        // Erro de execução
-        fprintf(stderr, "[DB] step SELECT event failed: %s\n",
-                sqlite3_errmsg(db));
-        sqlite3_finalize(stmt);
-        return rc;
-    }
-
     
-
-    // 0: eid
-    ev->eid = sqlite3_column_int(stmt, 0);
-
-    // 1: uid
-    const unsigned char *uid_col = sqlite3_column_text(stmt, 1);
-    snprintf(ev->uid, sizeof(ev->uid), "%s",
-             uid_col ? (const char *)uid_col : "");
-
-    // 2: name
-    const unsigned char *name_col = sqlite3_column_text(stmt, 2);
-    snprintf(ev->name, sizeof(ev->name), "%s",
-             name_col ? (const char *)name_col : "");
-
-    // 3: event_date (string)
-    const unsigned char *date_col = sqlite3_column_text(stmt, 3);
-    snprintf(ev->date, sizeof(ev->date), "%s",
-             date_col ? (const char *)date_col : "");
-
-    // 4: attendance_size → total_seats
-    ev->total_seats = sqlite3_column_int(stmt, 4);
-
-    // 5: seats_reserved
-    ev->reserved_seats = sqlite3_column_int(stmt, 5);
-
-    // 6: filename
-    const unsigned char *fname_col = sqlite3_column_text(stmt, 6);
-    snprintf(ev->filename, sizeof(ev->filename), "%s",
-             fname_col ? (const char *)fname_col : "");
-
-    // 7: filesize
-    sqlite3_int64 fs = sqlite3_column_int64(stmt, 7);
-    ev->file_size = (long)fs;
-
-    // 8: filedata (BLOB) – pode ser NULL
-    int blob_size = sqlite3_column_bytes(stmt, 8);
-    const void *blob = sqlite3_column_blob(stmt, 8);
-
-    if (blob && blob_size > 0) {
-        ev->filedata = malloc(blob_size);
-        if (!ev->filedata) {
-            fprintf(stderr, "[DB] malloc for filedata failed\n");
-            sqlite3_finalize(stmt);
-            return SQLITE_NOMEM;
+    ev->eid = eid;
+    
+    // Criar directoria do evento
+    if (!create_event_directory(eid)) {
+        fprintf(stderr, "[EVENT] Failed to create event directory for EID=%03d\n", eid);
+        return -1;
+    }
+    
+    // Criar ficheiro START_eid.txt
+    char start_filename[64];
+    snprintf(start_filename, sizeof(start_filename), "EVENTS/%03d/START_%03d.txt", eid, eid);
+    
+    FILE *fp = fopen(start_filename, "w");
+    if (!fp) {
+        fprintf(stderr, "[EVENT] Failed to create START file for EID=%03d\n", eid);
+        return -1;
+    }
+    
+    // Escrever: UID name desc_fname total_seats start_date start_time
+    // Nota: o enunciado usa dd-mm-yyyy HH:MM mas vou seguir o protocolo dd-mm-yyyy
+    fprintf(fp, "%s %s %s %d %s 00:00\n",
+            ev->uid, ev->name, ev->filename, ev->total_seats, ev->date);
+    fclose(fp);
+    
+    // Criar ficheiro RES_eid.txt com valor 0
+    char res_filename[64];
+    snprintf(res_filename, sizeof(res_filename), "EVENTS/%03d/RES_%03d.txt", eid, eid);
+    
+    fp = fopen(res_filename, "w");
+    if (!fp) {
+        fprintf(stderr, "[EVENT] Failed to create RES file for EID=%03d\n", eid);
+        return -1;
+    }
+    fprintf(fp, "0\n");
+    fclose(fp);
+    
+    // Guardar ficheiro de descrição em EVENTS/eid/DESCRIPTION/
+    if (ev->filedata && ev->file_size > 0) {
+        char desc_path[128];
+        snprintf(desc_path, sizeof(desc_path), "EVENTS/%03d/DESCRIPTION/%s", eid, ev->filename);
+        
+        fp = fopen(desc_path, "wb");
+        if (!fp) {
+            fprintf(stderr, "[EVENT] Failed to save description file for EID=%03d\n", eid);
+            return -1;
         }
-        memcpy(ev->filedata, blob, blob_size);
-        ev->file_size = blob_size;
-    } else {
-        ev->filedata = NULL;
-        ev->file_size = 0;
+        
+        fwrite(ev->filedata, 1, ev->file_size, fp);
+        fclose(fp);
     }
-
-    // 9: state
-    ev->state = sqlite3_column_int(stmt, 9);
-
-    sqlite3_finalize(stmt);
-    return SQLITE_OK;
+    
+    // Criar ficheiro de referência em USERS/uid/CREATED/eid.txt
+    char created_ref[64];
+    snprintf(created_ref, sizeof(created_ref), "USERS/%s/CREATED/%03d.txt", ev->uid, eid);
+    
+    fp = fopen(created_ref, "w");
+    if (fp) {
+        fprintf(fp, "Event %03d created\n", eid);
+        fclose(fp);
+    }
+    
+    printf("[EVENT] Created event EID=%03d by UID=%s\n", eid, ev->uid);
+    return 0;
 }
 
-int is_event_owner(sqlite3 *db, const char *uid, int eid) {
-    if (!db || !uid) {
-        fprintf(stderr, "[DB] is_event_owner: db or uid is NULL\n");
+/**
+ * Lê informação de um evento
+ */
+int get_event(int eid, Event *ev) {
+    if (!ev || eid < 1 || eid > 999) return -1;
+    
+    memset(ev, 0, sizeof(Event));
+    ev->eid = eid;
+    
+    // Verificar se evento existe
+    if (!event_exists(eid)) {
         return -1;
     }
-
-    int rc;
-    sqlite3_stmt *stmt = NULL;
-    int result = 0; // por default, não é dono
-
-    const char *sql =
-        "SELECT 1 "
-        "FROM events "
-        "WHERE eid = ? AND uid = ? "
-        "LIMIT 1;";
-
-    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
-    if (rc != SQLITE_OK) {
-        fprintf(stderr, "[DB] prepare is_event_owner failed: %s\n",
-                sqlite3_errmsg(db));
+    
+    // Ler ficheiro START
+    char start_filename[64];
+    snprintf(start_filename, sizeof(start_filename), "EVENTS/%03d/START_%03d.txt", eid, eid);
+    
+    FILE *fp = fopen(start_filename, "r");
+    if (!fp) {
         return -1;
     }
-
-    // Bind do eid (1º ?) e uid (2º ?)
-    rc = sqlite3_bind_int(stmt, 1, eid);
-    if (rc != SQLITE_OK) {
-        fprintf(stderr, "[DB] bind eid failed: %s\n", sqlite3_errmsg(db));
-        sqlite3_finalize(stmt);
+    
+    char time_str[16];
+    if (fscanf(fp, "%6s %10s %24s %d %10s %15s",
+               ev->uid, ev->name, ev->filename, &ev->total_seats, ev->date, time_str) != 6) {
+        fclose(fp);
         return -1;
     }
-
-    rc = sqlite3_bind_text(stmt, 2, uid, -1, SQLITE_TRANSIENT);
-    if (rc != SQLITE_OK) {
-        fprintf(stderr, "[DB] bind uid failed: %s\n", sqlite3_errmsg(db));
-        sqlite3_finalize(stmt);
-        return -1;
-    }
-
-    rc = sqlite3_step(stmt);
-
-    if (rc == SQLITE_ROW) {
-        // Há uma linha → existe evento com esse eid e esse uid
-        result = 1;
-    } else if (rc == SQLITE_DONE) {
-        // Nenhuma linha → ou não existe evento, ou não pertence a este uid
-        result = 0;
+    fclose(fp);
+    
+    // Ler número de reservas de RES
+    char res_filename[64];
+    snprintf(res_filename, sizeof(res_filename), "EVENTS/%03d/RES_%03d.txt", eid, eid);
+    
+    fp = fopen(res_filename, "r");
+    if (fp) {
+        fscanf(fp, "%d", &ev->reserved_seats);
+        fclose(fp);
     } else {
-        // Erro na execução
-        fprintf(stderr, "[DB] step is_event_owner failed: %s\n",
-                sqlite3_errmsg(db));
-        result = -1;
+        ev->reserved_seats = 0;
     }
-
-    sqlite3_finalize(stmt);
-    return result;
+    
+    // Verificar se existe ficheiro END
+    char end_filename[64];
+    snprintf(end_filename, sizeof(end_filename), "EVENTS/%03d/END_%03d.txt", eid, eid);
+    struct stat st;
+    if (stat(end_filename, &st) == 0) {
+        ev->state = 3; // Fechado
+    } else {
+        ev->state = 1; // Ativo
+    }
+    
+    return 0;
 }
 
+/**
+ * Verifica se utilizador é dono do evento
+ */
+int is_event_owner(const char *uid, int eid) {
+    if (!uid || eid < 1 || eid > 999) return 0;
+    
+    Event ev;
+    if (get_event(eid, &ev) != 0) {
+        return 0; // Evento não existe
+    }
+    
+    return (strcmp(ev.uid, uid) == 0) ? 1 : 0;
+}
+
+/**
+ * Verifica se data (dd-mm-yyyy HH:MM) já passou
+ * Retorna: 1 se passou, 0 se não passou, -1 em erro
+ */
+int is_date_in_past(const char *event_date) {
+    if (!event_date) return -1;
+    
+    // O protocolo usa dd-mm-yyyy, mas o guia menciona dd-mm-yyyy HH:MM
+    // Vou assumir que event_date pode vir como "dd-mm-yyyy" sem hora
+    // e compararei apenas a data, assumindo 00:00 para o evento
+    
+    int day, month, year;
+    if (sscanf(event_date, "%d-%d-%d", &day, &month, &year) != 3) {
+        fprintf(stderr, "[EVENT] Invalid date format: %s\n", event_date);
+        return -1;
+    }
+    
+    // Criar timestamp do evento (às 00:00)
+    struct tm event_tm;
+    memset(&event_tm, 0, sizeof(struct tm));
+    event_tm.tm_mday = day;
+    event_tm.tm_mon = month - 1;
+    event_tm.tm_year = year - 1900;
+    event_tm.tm_hour = 0;
+    event_tm.tm_min = 0;
+    event_tm.tm_sec = 0;
+    
+    time_t event_time = mktime(&event_tm);
+    if (event_time == -1) {
+        fprintf(stderr, "[EVENT] mktime failed for date: %s\n", event_date);
+        return -1;
+    }
+    
+    // Obter tempo atual
+    time_t now = time(NULL);
+    
+    // Comparar apenas as datas (ignorar horas)
+    struct tm *now_tm = localtime(&now);
+    now_tm->tm_hour = 0;
+    now_tm->tm_min = 0;
+    now_tm->tm_sec = 0;
+    time_t now_date = mktime(now_tm);
+    
+    return (event_time < now_date) ? 1 : 0;
+}
+
+/**
+ * Obtém o estado de um evento
+ * Retorna: 0=passado, 1=ativo, 2=sold-out, 3=fechado, -1=erro
+ */
+int get_event_state(int eid) {
+    Event ev;
+    
+    if (get_event(eid, &ev) != 0) {
+        return -1; // Evento não existe
+    }
+    
+    // Verificar se tem ficheiro END (foi fechado manualmente)
+    char end_filename[64];
+    snprintf(end_filename, sizeof(end_filename), "EVENTS/%03d/END_%03d.txt", eid, eid);
+    struct stat st;
+    if (stat(end_filename, &st) == 0) {
+        return 3; // Fechado
+    }
+    
+    // Verificar se data já passou
+    if (is_date_in_past(ev.date) == 1) {
+        return 0; // Passado
+    }
+    
+    // Verificar se está sold-out
+    if (ev.reserved_seats >= ev.total_seats) {
+        return 2; // Sold-out
+    }
+    
+    return 1; // Ativo
+}
+
+/**
+ * Fecha um evento
+ * Cria ficheiro END_eid.txt com timestamp
+ * Retorna: 0=OK, -1=não existe, -2=já fechado, -3=não é dono, 1=PST, 2=SLD
+ */
+int close_event(const char *uid, int eid) {
+    if (!uid || eid < 1 || eid > 999) return -1;
+    
+    // Verificar se evento existe
+    if (!event_exists(eid)) {
+        return -1; // NOE
+    }
+    
+    // Verificar ownership
+    if (!is_event_owner(uid, eid)) {
+        return -3; // EOW
+    }
+    
+    // Verificar estado atual
+    int state = get_event_state(eid);
+    
+    if (state == 3) {
+        return -2; // CLO - já fechado
+    }
+    
+    if (state == 0) {
+        return 1; // PST - já passou
+    }
+    
+    if (state == 2) {
+        return 2; // SLD - sold-out
+    }
+    
+    // Pode fechar - criar ficheiro END
+    char end_filename[64];
+    snprintf(end_filename, sizeof(end_filename), "EVENTS/%03d/END_%03d.txt", eid, eid);
+    
+    FILE *fp = fopen(end_filename, "w");
+    if (!fp) {
+        fprintf(stderr, "[EVENT] Failed to create END file for EID=%03d\n", eid);
+        return -1;
+    }
+    
+    // Escrever timestamp de encerramento
+    char timestamp[32];
+    get_current_timestamp(timestamp, sizeof(timestamp));
+    fprintf(fp, "%s\n", timestamp);
+    fclose(fp);
+    
+    printf("[EVENT] Closed event EID=%03d by UID=%s at %s\n", eid, uid, timestamp);
+    return 0; // OK
+}

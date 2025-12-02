@@ -149,10 +149,9 @@ int main(void) {
                         else if(strncmp(prt_str, CMD_LOGOUT, 3) == 0) {
                             handle_logout(ufd, prt_str, &_useraddr, addrlen);
                         }
-                        // TODO: Implementar unregister
-                        // else if(strncmp(prt_str, CMD_UNREGISTER, 3) == 0) {
-                        //     handle_unregister(ufd, prt_str, &_useraddr, addrlen);
-                        // }
+                        else if(strncmp(prt_str, CMD_UNREGISTER, 3) == 0) {
+                            handle_unregister(ufd, prt_str, &_useraddr, addrlen);
+                        }
                         // TODO: other UDP commands (my_events, my_reservations)
                         else if(!memcmp(prt_str,"_STOP",5))
                         {

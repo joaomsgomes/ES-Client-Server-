@@ -21,7 +21,7 @@ bool init_udp_connection(const char* server_ip, const char* server_port);
 // ===== COMANDOS UDP =====
 void cmd_login(const char* uid, const char* password);
 void cmd_logout(void);
-void cmd_unregister(const char* uid, const char* password);
+void cmd_unregister(void);
 void cmd_my_events(void);
 void cmd_my_reservations(void);
 

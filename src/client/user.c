@@ -22,7 +22,7 @@ static struct {
     char logged_uid[7];
     char logged_password[9];
     bool is_logged_in;
-} client_state = {-1, NULL, "", "", false};
+} client_state = {-1, NULL, "000000", "00000000", false};
 
 /**
  * Inicializa conexão UDP com o servidor
@@ -176,6 +176,47 @@ void cmd_logout() {
 
     } else if (strcmp(status, STATUS_ERR) == 0) {
     printf("Error: Invalid request format\n");
+        
+    } else {
+        printf("Unknown response: %s\n", response);
+    }
+}
+
+void cmd_unregister() {
+    // Implementar comando unregister similar a login/logout
+    char message[64];
+    char response[64];
+
+    snprintf(message, sizeof(message), "%s %s %s\n", CMD_UNREGISTER, client_state.logged_uid, client_state.logged_password);
+
+    if (!send_udp_receive_response(message, response, sizeof(response))) {
+        printf("Error: Communication with server failed\n");
+        return;
+    }
+
+    char rsp_code[4], status[4];
+    if (sscanf(response, "%3s %3s", rsp_code, status) != 2) {
+        printf("Error: Invalid response format\n");
+        return;
+    }
+
+    if (strcmp(status, STATUS_OK) == 0) {
+        client_state.is_logged_in = false;
+        strcpy(client_state.logged_uid, "000000");
+        strcpy(client_state.logged_password, "00000000");
+        printf("User unregistered successfully\n");
+        
+    } else if (strcmp(status, STATUS_NOK) == 0) {
+        printf("Error: Not logged in\n");
+        
+    } else if (strcmp(status, STATUS_UNR) == 0) {
+        printf("Error: Unknown user\n");
+        
+    } else if (strcmp(status, STATUS_WRP) == 0) {
+        printf("Error: Wrong password\n");
+
+    } else if (strcmp(status, STATUS_ERR) == 0) {
+        printf("Error: Invalid request format\n");
         
     } else {
         printf("Unknown response: %s\n", response);
@@ -605,6 +646,7 @@ CommandType parse_command_type(const char* command) {
     if (strcmp(command, "logout") == 0) return CMD_TYPE_LOGOUT;
     if (strcmp(command, "close") == 0) return CMD_TYPE_CLOSE;
     if (strcmp(command, "myevents") == 0 || strcmp(command, "mye") == 0) return CMD_TYPE_MYEVENTS;
+    if (strcmp(command, "unregister") == 0) return CMD_TYPE_UNREGISTER;
     if (strcmp(command, "help") == 0) return CMD_TYPE_HELP;
     if (strcmp(command, "exit") == 0 || strcmp(command, "quit") == 0) return CMD_TYPE_EXIT;
     return CMD_TYPE_UNKNOWN;
@@ -671,6 +713,13 @@ int main(int argc, char *argv[]) {
                     cmd_logout();
                 } else {
                     printf("Usage: logout\n");
+                }
+                break;
+            case CMD_TYPE_UNREGISTER:
+                if (parsed == 1) {
+                    cmd_unregister();
+                } else {
+                    printf("Usage: unregister\n");
                 }
                 break;
             case CMD_TYPE_CREATE:

@@ -270,3 +270,63 @@ void handle_my_events(int sockfd, char* message, struct sockaddr_in* client_addr
     
     printf("[UDP] MYEVENTS: Sent %d event(s) to user %s\n", event_count, uid);
 }
+
+void handle_unregister(int sockfd, char* message, struct sockaddr_in* client_addr, socklen_t addrlen) {
+    char cmd[4], uid[UID_LEN + 1], password[PASSWORD_LEN + 1];
+    char response[32];
+
+    // Parse: "UNR UID password\n"
+    int parsed = sscanf(message, "%3s %6s %8s", cmd, uid, password);
+
+    if (parsed != 3) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_UNREGISTER, STATUS_ERR);
+        sendto(sockfd, response, strlen(response), 0,
+               (struct sockaddr*)client_addr, addrlen);
+        printf("[UDP] UNREGISTER: Invalid format\n");
+        return;
+    }
+
+    if (!validate_uid(uid) || !validate_password(password)) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_UNREGISTER, STATUS_ERR);
+        sendto(sockfd, response, strlen(response), 0,
+               (struct sockaddr*)client_addr, addrlen);
+        printf("[UDP] UNREGISTER: Invalid UID or password format (UID=%s)\n", uid);
+        return;
+    }
+
+    int auth_result = authenticate_user(uid, password);
+    if (auth_result == 0) {
+        // User não existe → UNR
+        snprintf(response, sizeof(response), "%s %s\n", RSP_UNREGISTER, STATUS_UNR);
+        sendto(sockfd, response, strlen(response), 0,
+            (struct sockaddr*)client_addr, addrlen);
+        printf("[UDP] UNREGISTER: User %s not registered\n", uid);
+        return;
+    }
+
+    if (auth_result == -1) {
+        // Password errada → WRP
+        snprintf(response, sizeof(response), "%s %s\n", RSP_UNREGISTER, STATUS_WRP);
+        sendto(sockfd, response, strlen(response), 0,
+            (struct sockaddr*)client_addr, addrlen);
+        printf("[UDP] UNREGISTER: Wrong password for user %s\n", uid);
+        return;
+    }
+
+    int logged_status = is_user_logged_in(uid);
+    if (logged_status == 1) {
+        // User está logged in → OK (fazer logout + unregister)
+        logout_user(uid);
+        unregister_user(uid, password);
+        snprintf(response, sizeof(response), "%s %s\n", RSP_UNREGISTER, STATUS_OK);
+        sendto(sockfd, response, strlen(response), 0,
+                (struct sockaddr*)client_addr, addrlen);
+        printf("[UDP] UNREGISTER: User %s unregistered successfully\n", uid);
+    } else {
+        // User NÃO está logged in → NOK
+        snprintf(response, sizeof(response), "%s %s\n", RSP_UNREGISTER, STATUS_NOK);
+        sendto(sockfd, response, strlen(response), 0,
+                (struct sockaddr*)client_addr, addrlen);
+        printf("[UDP] UNREGISTER: User %s is not logged in\n", uid);
+    }
+}

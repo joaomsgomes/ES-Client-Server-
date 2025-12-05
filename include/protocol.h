@@ -11,14 +11,14 @@
 #define CMD_LOGIN "LIN"
 #define CMD_LOGOUT "LOU"
 #define CMD_UNREGISTER "UNR"
-#define CMD_MY_EVENTS "LME"
+#define CMD_MYEVENTS "LME"
 #define CMD_MY_RESERVATIONS "LMR"
 
 // Códigos de resposta UDP
 #define RSP_LOGIN "RLI"
 #define RSP_LOGOUT "RLO"
 #define RSP_UNREGISTER "RUR"
-#define RSP_MY_EVENTS "RME"
+#define RSP_MYEVENTS "RME"
 #define RSP_MY_RESERVATIONS "RMR"
 
 // Códigos de comando TCP
@@ -63,6 +63,8 @@ typedef enum {
     CMD_TYPE_LOGIN,
     CMD_TYPE_CREATE,
     CMD_TYPE_LOGOUT,
+    CMD_TYPE_CLOSE,
+    CMD_TYPE_MYEVENTS,
     CMD_TYPE_UNREGISTER,
     CMD_TYPE_HELP,
     CMD_TYPE_EXIT

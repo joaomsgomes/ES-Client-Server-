@@ -41,7 +41,6 @@ void init_file_system() {
         printf("[INIT] Created directory EVENTS/\n");
     }
     
-    printf("[INIT] File system initialized\n");
 }
 
 /**
@@ -53,21 +52,18 @@ void init_file_system() {
 int create_user_directory(const char *uid) {
     char dirname[64];
     
-    // Criar USERS/uid/
     snprintf(dirname, sizeof(dirname), "USERS/%s", uid);
     if (mkdir(dirname, 0700) == -1) {
         perror("[FS] Error creating user directory");
         return 0;
     }
-    
-    // Criar USERS/uid/CREATED/
+
     snprintf(dirname, sizeof(dirname), "USERS/%s/CREATED", uid);
     if (mkdir(dirname, 0700) == -1) {
         perror("[FS] Error creating CREATED directory");
         return 0;
     }
     
-    // Criar USERS/uid/RESERVED/
     snprintf(dirname, sizeof(dirname), "USERS/%s/RESERVED", uid);
     if (mkdir(dirname, 0700) == -1) {
         perror("[FS] Error creating RESERVED directory");

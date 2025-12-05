@@ -9,12 +9,6 @@
 #include "../../include/file_system.h"
 #include "../../include/utils.h"
 
-/**
- * Inicializa o sistema de eventos
- */
-void init_event_system() {
-    printf("[INIT] Event system ready (file-based)\n");
-}
 
 /**
  * Cria um novo evento

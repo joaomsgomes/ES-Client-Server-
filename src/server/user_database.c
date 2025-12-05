@@ -7,14 +7,6 @@
 #include "../../include/file_system.h"
 #include "../../include/utils.h"
 
-/**
- * Inicializa o sistema de gestão de utilizadores
- * (agora delegado ao file_system.c)
- */
-void init_user_system() {
-    // A inicialização é feita em init_file_system()
-    printf("[INIT] User system ready (file-based)\n");
-}
 
 /**
  * Regista um novo utilizador

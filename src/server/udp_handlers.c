@@ -3,6 +3,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <dirent.h>
 #include "../../include/es_server.h"
 #include "../../include/protocol.h"
 #include "../../include/user_management.h"
@@ -145,4 +146,127 @@ void handle_logout(int sockfd, char* message, struct sockaddr_in* client_addr, s
     }
     
 
+}
+
+void handle_my_events(int sockfd, char* message, struct sockaddr_in* client_addr, socklen_t addrlen) {
+    char cmd[4], uid[UID_LEN + 1], password[PASSWORD_LEN + 1];
+    char response[2048];  // Buffer grande para lista de eventos
+    
+    // Parse: "LME UID password\n"
+    int parsed = sscanf(message, "%3s %6s %8s", cmd, uid, password);
+    
+    if (parsed != 3) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_MYEVENTS, STATUS_ERR);
+        sendto(sockfd, response, strlen(response), 0, 
+               (struct sockaddr*)client_addr, addrlen);
+        printf("[UDP] MYEVENTS: Invalid format\n");
+        return;
+    }
+    
+    // Validar formato
+    if (!validate_uid(uid) || !validate_password(password)) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_MYEVENTS, STATUS_ERR);
+        sendto(sockfd, response, strlen(response), 0, 
+               (struct sockaddr*)client_addr, addrlen);
+        printf("[UDP] MYEVENTS: Invalid UID or password format (UID=%s)\n", uid);
+        return;
+    }
+    
+    // Autenticar utilizador
+    int auth_result = authenticate_user(uid, password);
+    
+    if (auth_result == 0) {
+        // Utilizador não existe
+        snprintf(response, sizeof(response), "%s %s\n", RSP_MYEVENTS, STATUS_NOK);
+        sendto(sockfd, response, strlen(response), 0, 
+               (struct sockaddr*)client_addr, addrlen);
+        printf("[UDP] MYEVENTS: User %s not registered\n", uid);
+        return;
+    }
+    
+    if (auth_result == -1) {
+        // Password incorreta
+        snprintf(response, sizeof(response), "%s %s\n", RSP_MYEVENTS, STATUS_WRP);
+        sendto(sockfd, response, strlen(response), 0, 
+               (struct sockaddr*)client_addr, addrlen);
+        printf("[UDP] MYEVENTS: Wrong password for user %s\n", uid);
+        return;
+    }
+    
+    // Verificar se está logado
+    if (!is_user_logged_in(uid)) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_MYEVENTS, STATUS_NLG);
+        sendto(sockfd, response, strlen(response), 0, 
+               (struct sockaddr*)client_addr, addrlen);
+        printf("[UDP] MYEVENTS: User %s not logged in\n", uid);
+        return;
+    }
+    
+    // Construir caminho para pasta CREATED do utilizador
+    char created_path[256];
+    snprintf(created_path, sizeof(created_path), "USERS/%s/CREATED", uid);
+    
+    // Ler lista de eventos criados pelo utilizador
+    struct dirent **entries;
+    int n = scandir(created_path, &entries, NULL, alphasort);
+    
+    if (n < 0) {
+        // Pasta não existe ou erro ao ler (utilizador sem eventos)
+        snprintf(response, sizeof(response), "%s %s\n", RSP_MYEVENTS, STATUS_NOK);
+        sendto(sockfd, response, strlen(response), 0, 
+               (struct sockaddr*)client_addr, addrlen);
+        printf("[UDP] MYEVENTS: User %s has no events\n", uid);
+        return;
+    }
+    
+    // Iniciar construção da resposta
+    int offset = snprintf(response, sizeof(response), "%s %s", RSP_MYEVENTS, STATUS_OK);
+    int event_count = 0;
+    
+    // Percorrer todos os ficheiros na pasta CREATED
+    for (int i = 0; i < n; i++) {
+        // Ignorar "." e ".."
+        if (strcmp(entries[i]->d_name, ".") == 0 || 
+            strcmp(entries[i]->d_name, "..") == 0) {
+            free(entries[i]);
+            continue;
+        }
+        
+        // Extrair EID do nome do ficheiro (formato: "EID.txt" ou só "EID")
+        int eid = atoi(entries[i]->d_name);
+        
+        if (eid >= 1 && eid <= 999) {
+            // Obter estado do evento
+            int state = get_event_state(eid);
+            
+            // Adicionar à resposta: " EID state"
+            offset += snprintf(response + offset, sizeof(response) - offset, 
+                             " %d %d", eid, state);
+            event_count++;
+            
+            printf("[UDP] MYEVENTS: Found event %03d with state %d for user %s\n", 
+                   eid, state, uid);
+        }
+        
+        free(entries[i]);
+    }
+    free(entries);
+    
+    // Se não encontrou nenhum evento válido
+    if (event_count == 0) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_MYEVENTS, STATUS_NOK);
+        sendto(sockfd, response, strlen(response), 0, 
+               (struct sockaddr*)client_addr, addrlen);
+        printf("[UDP] MYEVENTS: User %s has no valid events\n", uid);
+        return;
+    }
+    
+    // Adicionar newline final
+    offset += snprintf(response + offset, sizeof(response) - offset, "\n");
+    
+    // Enviar resposta
+    sendto(sockfd, response, strlen(response), 0, 
+           (struct sockaddr*)client_addr, addrlen);
+    
+    printf("[UDP] MYEVENTS: Sent %d event(s) to user %s\n", event_count, uid);
 }

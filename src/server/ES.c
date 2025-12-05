@@ -69,8 +69,6 @@ int main(void) {
 
     // Inicializar sistema de ficheiros, utilizadores e eventos
     init_file_system();
-    init_user_system();
-    init_event_system();
     printf("ES Server started on UDP port %s\n", MYPORT);
 
     // TCP SETUP AND SERVER SECTION
@@ -153,7 +151,10 @@ int main(void) {
                         // else if(strncmp(prt_str, CMD_UNREGISTER, 3) == 0) {
                         //     handle_unregister(ufd, prt_str, &_useraddr, addrlen);
                         // }
-                        // TODO: other UDP commands (my_events, my_reservations)
+                        // TODO: other UDP commands (my_reservations)
+                        else if(strncmp(prt_str, CMD_MYEVENTS, 3) == 0) {
+                            handle_my_events(ufd, prt_str, &_useraddr, addrlen);
+                        }
                         else if(!memcmp(prt_str,"_STOP",5))
                         {
                             write(1,"Terminating\n",12);
@@ -175,7 +176,7 @@ int main(void) {
                             printf("[TCP] New connection from [%s:%s] fd=%d\n", host, service, client_fd);
                         
                         // Ler comando TCP (buffer grande para ficheiros)
-                        char *tcp_buffer = malloc(MAX_FILE_SIZE + 1024); // Espaço para comando + ficheiro
+                        char *tcp_buffer = malloc(MAX_FILE_SIZE + 1024); 
                         if (!tcp_buffer) {
                             printf("[TCP] ERROR: Memory allocation failed\n");
                             close(client_fd);
@@ -183,13 +184,19 @@ int main(void) {
                             ssize_t bytes_read = recv(client_fd, tcp_buffer, MAX_FILE_SIZE + 1024, 0);
                             
                             if (bytes_read > 0) {
-                                tcp_buffer[bytes_read] = '\0'; // Null terminate (apenas para debug)
+                                tcp_buffer[bytes_read] = '\0'; 
                                 printf("[TCP] Received %zd bytes\n", bytes_read);
                                 
                                 // Identificar comando (primeiros 3 caracteres)
                                 if (bytes_read >= 3) {
                                     if (strncmp(tcp_buffer, CMD_CREATE, 3) == 0) {
                                         handle_create_event(client_fd, tcp_buffer, bytes_read);
+                                    }
+                                    else if (strncmp(tcp_buffer, CMD_CLOSE, 3) == 0) {
+                                        handle_close_event(client_fd, tcp_buffer, bytes_read);
+                                    }
+                                    else {
+                                        printf("[TCP] Unknown command\n");
                                     }
                                 } else {
                                     printf("[TCP] Invalid command (too short)\n");

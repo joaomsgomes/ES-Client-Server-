@@ -19,8 +19,8 @@
 static struct {
     int udp_socket;
     struct addrinfo *server_addr;
-    char logged_uid[7];  // UID do utilizador logado (ou vazio)
-    char logged_password[9];  // Password do utilizador logado
+    char logged_uid[7];
+    char logged_password[9];
     bool is_logged_in;
 } client_state = {-1, NULL, "", "", false};
 
@@ -380,12 +380,231 @@ void cmd_create(const char* name, const char* event_fname, const char* event_dat
     }
 }
 
+/**
+ * Comando: close EID
+ * Fecha um evento criado pelo utilizador logado
+ */
+void cmd_close(const char* eid_str) {
+    // Verificar se está logado
+    if (!client_state.is_logged_in) {
+        printf("Error: You must be logged in to close events\n");
+        return;
+    }
+    
+    // Converter EID para inteiro
+    int eid = atoi(eid_str);
+    
+    // Validar EID
+    if (eid < 1 || eid > 999) {
+        printf("Error: Invalid EID (must be between 1 and 999)\n");
+        return;
+    }
+    
+    printf("Closing event EID=%03d...\n", eid);
+    
+    // Conectar ao servidor TCP (porta 58001)
+    struct addrinfo hints, *tcp_res;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    
+    int errcode = getaddrinfo("localhost", "58001", &hints, &tcp_res);
+    if (errcode != 0) {
+        fprintf(stderr, "Error: getaddrinfo TCP: %s\n", gai_strerror(errcode));
+        return;
+    }
+    
+    int tcp_socket = socket(tcp_res->ai_family, tcp_res->ai_socktype, tcp_res->ai_protocol);
+    if (tcp_socket == -1) {
+        perror("Error creating TCP socket");
+        freeaddrinfo(tcp_res);
+        return;
+    }
+    
+    if (connect(tcp_socket, tcp_res->ai_addr, tcp_res->ai_addrlen) == -1) {
+        perror("Error connecting to TCP server");
+        close(tcp_socket);
+        freeaddrinfo(tcp_res);
+        return;
+    }
+    
+    freeaddrinfo(tcp_res);
+    
+    // Construir comando: "CLS UID password EID\n"
+    char command[128];
+    int cmd_len = snprintf(command, sizeof(command),
+                          "%s %s %s %03d\n",
+                          CMD_CLOSE, client_state.logged_uid, 
+                          client_state.logged_password, eid);
+    
+    if (cmd_len < 0 || cmd_len >= (int)sizeof(command)) {
+        printf("Error: Command too long\n");
+        close(tcp_socket);
+        return;
+    }
+    
+    // Enviar comando
+    ssize_t sent = send(tcp_socket, command, cmd_len, 0);
+    if (sent != cmd_len) {
+        perror("Error sending command");
+        close(tcp_socket);
+        return;
+    }
+    
+    printf("Command sent, waiting for response...\n");
+    
+    // Receber resposta: "RCL status\n"
+    char response[64];
+    ssize_t resp_len = recv(tcp_socket, response, sizeof(response) - 1, 0);
+    close(tcp_socket);
+    
+    if (resp_len <= 0) {
+        printf("Error: No response from server\n");
+        return;
+    }
+    
+    response[resp_len] = '\0';
+    
+    // Parse resposta
+    char rsp_code[4], status[4];
+    int parsed = sscanf(response, "%3s %3s", rsp_code, status);
+    
+    if (parsed < 2) {
+        printf("Error: Invalid response format\n");
+        return;
+    }
+    
+    // Processar status
+    if (strcmp(status, STATUS_OK) == 0) {
+        printf("✓ Event closed successfully!\n");
+        printf("  EID %03d is now closed for new reservations\n", eid);
+    } else if (strcmp(status, STATUS_NOK) == 0) {
+        printf("✗ Error: User does not exist or wrong password\n");
+    } else if (strcmp(status, STATUS_NLG) == 0) {
+        printf("✗ Error: User not logged in\n");
+    } else if (strcmp(status, STATUS_NOE) == 0) {
+        printf("✗ Error: Event does not exist (EID=%03d)\n", eid);
+    } else if (strcmp(status, STATUS_EOW) == 0) {
+        printf("✗ Error: You are not the owner of this event\n");
+    } else if (strcmp(status, STATUS_SLD) == 0) {
+        printf("ℹ Event is already sold-out (all seats reserved)\n");
+    } else if (strcmp(status, STATUS_PST) == 0) {
+        printf("ℹ Event date has already passed\n");
+    } else if (strcmp(status, STATUS_CLO) == 0) {
+        printf("ℹ Event has been closed\n");
+    } else if (strcmp(status, STATUS_ERR) == 0) {
+        printf("✗ Error: Invalid command format\n");
+    } else {
+        printf("Unknown response: %s\n", response);
+    }
+}
 
+void cmd_mye() {
+    
+    char message[64];
+    char response[64];
+
+    // Validar que utilizador está autenticado
+    if (!client_state.is_logged_in) {
+        printf("Error: User needs to be logged in to view their events\n");
+        return;
+    }
+
+    // Construir mensagem: "LME UID password\n"
+    snprintf(message, sizeof(message), "%s %s %s\n", CMD_MYEVENTS, client_state.logged_uid, client_state.logged_password);
+    
+    // Enviar e receber resposta
+    if (!send_udp_receive_response(message, response, sizeof(response))) {
+        printf("Error: Communication with server failed\n");
+        return;
+    }
+    
+    // Parse resposta: "RME status [EID state]* \n"
+    char rsp_code[4], status[4];
+    if (sscanf(response, "%3s %3s", rsp_code, status) != 2) {
+        printf("Error: Invalid response format\n");
+        return;
+    }
+    
+    // Processar status
+    if (strcmp(status, STATUS_OK) == 0) {
+        // Parse da lista de eventos
+        char *ptr = response + 7;  // Saltar "RME OK "
+        int event_count = 0;
+        
+        printf("\n═══════════════════════════════════════════════════════\n");
+        printf("  Your Events\n");
+        printf("═══════════════════════════════════════════════════════\n");
+        printf("  EID    Status\n");
+        printf("───────────────────────────────────────────────────────\n");
+        
+        int eid, state;
+        while (sscanf(ptr, "%d %d", &eid, &state) == 2) {
+            event_count++;
+            
+            const char *status_str;
+            
+            
+            switch (state) {
+                case 0:
+                    status_str = "Past (ended)";
+                    break;
+                case 1:
+                    status_str = "Active (accepting reservations)";
+                    break;
+                case 2:
+                    status_str = "Sold out";
+                    break;
+                case 3:
+                    status_str = "Closed by you";
+                    break;
+                default:
+                    status_str = "Unknown";
+                    break;
+            }
+            
+            printf("  %03d    %s\n", eid, status_str);
+            
+            // Avançar para próximo par EID state
+            while (*ptr && *ptr != ' ') ptr++;
+            if (*ptr) ptr++;  // Saltar espaço
+            
+            // Procurar próximo espaço (após state)
+            while (*ptr && *ptr != ' ' && *ptr != '\n') ptr++;
+            if (*ptr == ' ') ptr++;
+            
+        }
+        
+        printf("───────────────────────────────────────────────────────\n");
+        printf("  Total: %d event(s)\n", event_count);
+        printf("═══════════════════════════════════════════════════════\n\n");
+        
+    } else if (strcmp(status, STATUS_NOK) == 0) {
+        printf("You have not created any events yet\n");
+        
+    } else if (strcmp(status, STATUS_NLG) == 0) {
+        printf("Error: User not logged in\n");
+        
+    } else if (strcmp(status, STATUS_WRP) == 0) {
+        printf("Error: Wrong password\n");
+        
+    } else if (strcmp(status, STATUS_ERR) == 0) {
+        printf("Error: Invalid request format\n");
+        
+    } else {
+        printf("Unknown response: %s\n", response);
+    }
+
+
+}
 
 CommandType parse_command_type(const char* command) {
+
     if (strcmp(command, "login") == 0) return CMD_TYPE_LOGIN;
     if (strcmp(command, "create") == 0) return CMD_TYPE_CREATE;
     if (strcmp(command, "logout") == 0) return CMD_TYPE_LOGOUT;
+    if (strcmp(command, "close") == 0) return CMD_TYPE_CLOSE;
+    if (strcmp(command, "myevents") == 0 || strcmp(command, "mye") == 0) return CMD_TYPE_MYEVENTS;
     if (strcmp(command, "help") == 0) return CMD_TYPE_HELP;
     if (strcmp(command, "exit") == 0 || strcmp(command, "quit") == 0) return CMD_TYPE_EXIT;
     return CMD_TYPE_UNKNOWN;
@@ -463,12 +682,30 @@ int main(int argc, char *argv[]) {
                     printf("Example: create Concert poster.jpg 31-12-2025 500\n");
                 }
                 break;
-                
+            case CMD_TYPE_CLOSE:
+                if (parsed == 2) {
+                    cmd_close(arg1);
+                } else {
+                    printf("Usage: close EID\n");
+                }
+                break;
+            case CMD_TYPE_MYEVENTS:
+                if (parsed == 1) {
+                    cmd_mye();
+                }
+                else {
+                    printf("Usage: myevents\n");
+                }
+                break;
             case CMD_TYPE_HELP:
                 show_help();
                 break;
                 
             case CMD_TYPE_EXIT:
+                if (client_state.is_logged_in) {
+                    printf("Warning: You are still logged in. Logging out automatically...\n");
+                    cmd_logout();
+                }
                 printf("Exiting...\n");
                 goto cleanup_and_exit;
                 

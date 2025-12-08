@@ -194,6 +194,9 @@ int main(void) {
                                     else if (strncmp(tcp_buffer, CMD_CLOSE, 3) == 0) {
                                         handle_close_event(client_fd, tcp_buffer, bytes_read);
                                     }
+                                    else if (strncmp(tcp_buffer, CMD_LIST, 3) == 0) {
+                                        handle_list_events(client_fd, tcp_buffer, bytes_read);  
+                                    }
                                     else {
                                         printf("[TCP] Unknown command\n");
                                     }

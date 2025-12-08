@@ -14,6 +14,8 @@
 #define INPUT_BUFFER_SIZE 256
 #define PASSWORD_LEN 8
 #define UID_LEN 6
+#define DATE_STR_LEN 10
+#define EVENT_NAME_LEN 10
 
 // Estado global do cliente
 static struct {
@@ -639,6 +641,153 @@ void cmd_mye() {
 
 }
 
+void cmd_list() {
+
+
+    char message[64];
+    char response[8192];  // Buffer grande para múltiplos eventos
+    
+    // Construir mensagem: "LST\n"
+    snprintf(message, sizeof(message), "%s\n", CMD_LIST);
+    
+    // Conectar ao servidor TCP (porta 58001)
+    struct addrinfo hints, *tcp_res;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    
+    int errcode = getaddrinfo("localhost", "58001", &hints, &tcp_res);
+    if (errcode != 0) {
+        fprintf(stderr, "Error: getaddrinfo TCP: %s\n", gai_strerror(errcode));
+        return;
+    }
+    
+    int tcp_socket = socket(tcp_res->ai_family, tcp_res->ai_socktype, tcp_res->ai_protocol);
+    if (tcp_socket == -1) {
+        perror("Error creating TCP socket");
+        freeaddrinfo(tcp_res);
+        return;
+    }
+    
+    if (connect(tcp_socket, tcp_res->ai_addr, tcp_res->ai_addrlen) == -1) {
+        perror("Error connecting to TCP server");
+        close(tcp_socket);
+        freeaddrinfo(tcp_res);
+        return;
+    }
+    
+    freeaddrinfo(tcp_res);
+    
+    // Enviar comando
+    ssize_t sent = send(tcp_socket, message, strlen(message), 0);
+    if (sent != (ssize_t)strlen(message)) {
+        perror("Error sending command");
+        close(tcp_socket);
+        return;
+    }
+    
+    // Receber resposta: "RLS status [EID name state event_date event_time]*\n"
+    ssize_t resp_len = recv(tcp_socket, response, sizeof(response) - 1, 0);
+    close(tcp_socket);
+    
+    if (resp_len <= 0) {
+        printf("Error: No response from server\n");
+        return;
+    }
+    
+    response[resp_len] = '\0';
+    
+    // Parse resposta
+    char rsp_code[4], status[4];
+    if (sscanf(response, "%3s %3s", rsp_code, status) != 2) {
+        printf("Error: Invalid response format\n");
+        return;
+    }
+    
+    // Processar status
+    if (strcmp(status, STATUS_OK) == 0) {
+        // Parse da lista de eventos
+        char *ptr = response + 7;  // Saltar "RLS OK "
+        int event_count = 0;
+        
+        printf("\n╔═════════════════════════════════════════════════════════════════════════╗\n");
+        printf("║                         ALL AVAILABLE EVENTS                            ║\n");
+        printf("╠═════════════════════════════════════════════════════════════════════════╣\n");
+        printf("║  EID  │  Name       │  Status                      │  Date & Time      ║\n");
+        printf("╠═══════╪═════════════╪══════════════════════════════╪═══════════════════╣\n");
+        
+        int eid, state;
+        char event_name[EVENT_NAME_LEN + 1];
+        char event_date[DATE_STR_LEN + 1];
+        char event_time[6]; 
+        
+        // Formato: EID name state date time
+        while (sscanf(ptr, "%d %10s %d %10s %5s", 
+                      &eid, event_name, &state, event_date, event_time) == 5) {
+            event_count++;
+            
+            const char *status_str;
+            
+            
+            switch (state) {
+                case 0:
+                    status_str = "Past";
+                    break;
+                case 1:
+                    status_str = "Active";                   
+                    break;
+                case 2:
+                    status_str = "Sold Out";
+                    break;
+                case 3:
+                    status_str = "Closed";
+                    break;
+                default:
+                    status_str = "Unknown";
+                    break;
+            }
+            
+            printf("║  %03d  │  %-10s │  %-27s │  %s %s  ║\n", 
+                   eid, event_name, status_str, event_date, event_time);
+            
+            // Avançar para próximo evento (5 campos)
+            // Saltar EID
+            while (*ptr && *ptr != ' ') ptr++;
+            if (*ptr) ptr++;
+            
+            // Saltar name
+            while (*ptr && *ptr != ' ') ptr++;
+            if (*ptr) ptr++;
+            
+            // Saltar state
+            while (*ptr && *ptr != ' ') ptr++;
+            if (*ptr) ptr++;
+            
+            // Saltar date
+            while (*ptr && *ptr != ' ') ptr++;
+            if (*ptr) ptr++;
+            
+            // Saltar time
+            while (*ptr && *ptr != ' ' && *ptr != '\n') ptr++;
+            if (*ptr == ' ') ptr++;
+        }
+        
+        printf("╠═════════════════════════════════════════════════════════════════════════╣\n");
+        printf("║  Total: %-3d event(s)                                                    ║\n", event_count);
+        printf("╚═════════════════════════════════════════════════════════════════════════╝\n\n");
+        
+    } else if (strcmp(status, STATUS_NOK) == 0) {
+        printf("No events available yet\n");
+        
+    } else if (strcmp(status, STATUS_ERR) == 0) {
+        printf("Error: Invalid request format\n");
+        
+    } else {
+        printf("Unknown response: %s\n", response);
+    }
+}
+
+
 CommandType parse_command_type(const char* command) {
 
     if (strcmp(command, "login") == 0) return CMD_TYPE_LOGIN;
@@ -646,6 +795,7 @@ CommandType parse_command_type(const char* command) {
     if (strcmp(command, "logout") == 0) return CMD_TYPE_LOGOUT;
     if (strcmp(command, "close") == 0) return CMD_TYPE_CLOSE;
     if (strcmp(command, "myevents") == 0 || strcmp(command, "mye") == 0) return CMD_TYPE_MYEVENTS;
+    if (strcmp(command, "list") == 0) return CMD_TYPE_LIST;
     if (strcmp(command, "unregister") == 0) return CMD_TYPE_UNREGISTER;
     if (strcmp(command, "help") == 0) return CMD_TYPE_HELP;
     if (strcmp(command, "exit") == 0 || strcmp(command, "quit") == 0) return CMD_TYPE_EXIT;
@@ -686,10 +836,10 @@ int main(int argc, char *argv[]) {
             break;
         }
         
-        // Remove newline
+        
         input[strcspn(input, "\n")] = '\0';
         
-        // Parse comando
+        
         char arg3[32], arg4[256];
         int parsed = sscanf(input, "%31s %31s %31s %31s %255s", command, arg1, arg2, arg3, arg4);
         
@@ -744,6 +894,14 @@ int main(int argc, char *argv[]) {
                 }
                 else {
                     printf("Usage: myevents\n");
+                }
+                break;
+            case CMD_TYPE_LIST:
+                if (parsed  ==  1) {
+                    cmd_list();
+                }
+                else {
+                    printf("Usage: list\n");
                 }
                 break;
             case CMD_TYPE_HELP:

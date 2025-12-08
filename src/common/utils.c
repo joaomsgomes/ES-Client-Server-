@@ -30,6 +30,11 @@ void show_help() {
     printf("║    - Shows event ID and status for each event                ║\n");
     printf("║    - Status: Active, Sold out, Past, or Closed               ║\n");
     printf("║                                                               ║\n");
+    printf("║  list                                                        ║\n");
+    printf("║    - List all available events on the server                 ║\n");
+    printf("║    - Shows event ID, name, status, date and time             ║\n");
+    printf("║    - Does not require login                                  ║\n");
+    printf("║                                                               ║\n");
     printf("║  logout                                                      ║\n");
     printf("║    - Logout from current session                             ║\n");
     printf("║                                                               ║\n");

@@ -3,6 +3,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <dirent.h>
 #include "../../include/es_server.h"
 #include "../../include/protocol.h"
 #include "../../include/user_management.h"
@@ -177,6 +178,7 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
  * Resposta: RCL status\n
  */
 void handle_close_event(int client_fd, char* buffer, ssize_t n) {
+
     (void)n;
     
     char cmd[4], uid[UID_LEN + 1], password[PASSWORD_LEN + 1];
@@ -242,3 +244,131 @@ void handle_close_event(int client_fd, char* buffer, ssize_t n) {
     
     printf("[TCP] CLOSE: EID=%03d, UID=%s, status=%s\n", eid, uid, status);
 }
+
+void handle_list_events(int client_fd, char* buffer, ssize_t bytes_read) {
+    (void)bytes_read;
+    
+    char cmd[4];
+    char response[8192];  // Buffer grande para múltiplos eventos
+    
+    // Parse: "LST\n"
+    int parsed = sscanf(buffer, "%3s", cmd);
+    
+    if (parsed != 1) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_LIST, STATUS_ERR);
+        send(client_fd, response, strlen(response), 0);
+        printf("[TCP] LIST: Invalid format\n");
+        return;
+    }
+    
+    // Ler pasta EVENTS/ para obter todos os eventos
+    struct dirent **entries;
+    int n = scandir("EVENTS", &entries, NULL, alphasort);
+    
+    if (n < 0) {
+        // Pasta não existe ou erro ao ler
+        snprintf(response, sizeof(response), "%s %s\n", RSP_LIST, STATUS_NOK);
+        send(client_fd, response, strlen(response), 0);
+        printf("[TCP] LIST: No events directory found\n");
+        return;
+    }
+    
+    // Iniciar construção da resposta
+    int offset = snprintf(response, sizeof(response), "%s %s", RSP_LIST, STATUS_OK);
+    int event_count = 0;
+    
+    // Percorrer todos os eventos na pasta EVENTS
+    for (int i = 0; i < n; i++) {
+        // Ignorar "." e ".."
+        if (strcmp(entries[i]->d_name, ".") == 0 || 
+            strcmp(entries[i]->d_name, "..") == 0) {
+            free(entries[i]);
+            continue;
+        }
+        
+        // Extrair EID do nome da pasta (formato: "001", "002", etc)
+        int eid = atoi(entries[i]->d_name);
+        
+        if (eid >= 1 && eid <= 999) {
+            // Ler informações do evento do ficheiro START_eid.txt
+            char start_file[128];
+            snprintf(start_file, sizeof(start_file), "EVENTS/%03d/START_%03d.txt", eid, eid);
+            
+            FILE *fp = fopen(start_file, "r");
+            if (!fp) {
+                free(entries[i]);
+                continue;  // Evento sem ficheiro START, ignorar
+            }
+            
+            // Ler conteúdo: "UID name desc_fname total_seats start_date start_time"
+            char event_uid[UID_LEN + 1];
+            char event_name[EVENT_NAME_LEN + 1];
+            char desc_fname[FILENAME_LEN + 1];
+            int total_seats;
+            char event_date[DATE_STR_LEN + 1];
+            char event_time[6];  // hh:mm
+            
+            int fields = fscanf(fp, "%6s %10s %24s %d %10s %5s",
+                               event_uid, event_name, desc_fname, 
+                               &total_seats, event_date, event_time);
+            fclose(fp);
+            
+            if (fields != 6) {
+                free(entries[i]);
+                continue;  // Formato inválido, ignorar
+            }
+            
+            // Obter estado do evento
+            int state = get_event_state(eid);
+            
+            // Adicionar à resposta: " EID name state event_date"
+            // Formato completo da data: "dd-mm-yyyy hh:mm"
+            offset += snprintf(response + offset, sizeof(response) - offset, 
+                             " %d %s %d %s %s", 
+                             eid, event_name, state, event_date, event_time);
+            event_count++;
+            
+            printf("[TCP] LIST: Found event %03d: name=%s, state=%d, date=%s %s\n", 
+                   eid, event_name, state, event_date, event_time);
+        }
+        
+        free(entries[i]);
+    }
+    free(entries);
+    
+    // Se não encontrou nenhum evento válido
+    if (event_count == 0) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_LIST, STATUS_NOK);
+        send(client_fd, response, strlen(response), 0);
+        printf("[TCP] LIST: No valid events found\n");
+        return;
+    }
+    
+    // Adicionar newline final
+    offset += snprintf(response + offset, sizeof(response) - offset, "\n");
+    
+    // Enviar resposta
+    send(client_fd, response, strlen(response), 0);
+    
+    printf("[TCP] LIST: Sent %d event(s)\n", event_count);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

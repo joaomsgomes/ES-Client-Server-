@@ -68,6 +68,7 @@ typedef enum {
     CMD_TYPE_LIST,
     CMD_TYPE_UNREGISTER,
     CMD_TYPE_CHANGE_PASSWORD,
+    CMD_TYPE_SHOW,
     CMD_TYPE_HELP,
     CMD_TYPE_EXIT
 } CommandType;

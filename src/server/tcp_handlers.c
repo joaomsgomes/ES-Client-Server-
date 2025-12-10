@@ -201,6 +201,9 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
     strncpy(ev.date, date, DATE_STR_LEN);
     ev.date[DATE_STR_LEN] = '\0';
     
+    strncpy(ev.time, "00:00", TIME_STR_LEN);
+    ev.time[TIME_STR_LEN] = '\0';
+    
     ev.total_seats = attendance;
     ev.reserved_seats = 0;
     
@@ -415,6 +418,98 @@ void handle_list_events(int client_fd, char* buffer, ssize_t bytes_read) {
     write(client_fd, response, strlen(response));
     
     printf("[TCP] LIST: Sent %d event(s)\n", event_count);
+}
+
+
+
+
+
+void handle_show_event(int client_fd, char* buffer, ssize_t bytes_read) {
+    (void)bytes_read;
+
+    char cmd[4];
+    int eid;
+    char response[128];
+    
+    // Parse: "SED EID\n"
+    int parsed = sscanf(buffer, "%3s %d", cmd, &eid);
+
+    if (parsed != 2) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_SHOW, STATUS_NOK);
+        write(client_fd, response, strlen(response));
+        printf("[TCP] SHOW: Invalid format\n");
+        return;
+    }
+
+    if (eid < 1 || eid > 999) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_SHOW, STATUS_ERR);
+        write(client_fd, response, strlen(response));
+        printf("[TCP] SHOW: Invalid EID\n");
+        return;
+    }
+
+    // Ler informações do evento do ficheiro START_eid.txt
+    Event ev;
+    
+    if (get_event(eid, &ev) != 0) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_SHOW, STATUS_NOK);
+        write(client_fd, response, strlen(response));
+        return;
+    }
+
+    // Verificar se filedata é válido
+    if (ev.filedata == NULL) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_SHOW, STATUS_NOK);
+        write(client_fd, response, strlen(response));
+        printf("[TCP] SHOW: Event %03d not found\n", eid);
+        return;
+    }
+
+    // Construir header (só texto)
+    // RSE OK UID name date time attendance reserved Fname Fsize
+    char header[512];
+    int header_len = snprintf(header, sizeof(header),
+                              "%s %s %s %s %s %s %d %d %s %ld ",
+                              RSP_SHOW, STATUS_OK,
+                              ev.uid, ev.name, ev.date, ev.time,
+                              ev.total_seats, ev.reserved_seats,
+                              ev.filename, ev.file_size);
+
+    if (header_len < 0 || header_len >= (int)sizeof(header)) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_SHOW, STATUS_NOK);
+        write(client_fd, response, strlen(response));
+        printf("[TCP] SHOW: Header construction failed for EID=%03d\n", eid);
+        return;
+    }
+
+    size_t total_size = header_len + ev.file_size + 1;
+    
+    char *full_message = malloc(total_size);
+    if (!full_message) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_SHOW, STATUS_NOK);
+        write(client_fd, response, strlen(response));
+        printf("[TCP] SHOW: Memory allocation failed for event %03d\n", eid);
+        return;
+    }
+
+    memcpy(full_message, header, header_len);
+    memcpy(full_message + header_len, ev.filedata, ev.file_size);
+    full_message[header_len + ev.file_size] = '\n';
+
+    size_t total_sent = 0;
+    while (total_sent < total_size) {
+        ssize_t n = write(client_fd, full_message + total_sent, total_size - total_sent);
+        if (n <= 0) {
+            perror("[TCP] SHOW: Error sending data");
+            free(full_message);
+            return;
+        }
+        total_sent += n;
+    }
+
+    free(full_message);
+    printf("[TCP] SHOW: Event %03d sent successfully (%ld bytes)\n", eid, ev.file_size);
+
 }
 
 

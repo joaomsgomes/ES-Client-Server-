@@ -253,7 +253,7 @@ void cmd_unregister() {
         printf("Error: Not logged in\n");
         
     } else if (strcmp(status, STATUS_UNR) == 0) {
-        printf("Error: Unknown user\n");
+        printf("Error: User not registered\n");
         
     } else if (strcmp(status, STATUS_WRP) == 0) {
         printf("Error: Wrong password\n");
@@ -859,6 +859,182 @@ void cmd_change_password(const char* old_pass, const char* new_pass) {
     }
 }
 
+void cmd_show(const char* eid_str) {
+
+    if (!client_state.is_logged_in) {
+        printf("Error: User needs to be logged in to view event details\n");
+        return;
+    }
+
+    if (strlen(eid_str) > 3) {
+        printf("Error: Invalid EID (must be between 1 and 999)\n");
+        return;
+    }
+
+    int eid = atoi(eid_str);
+    if (eid < 1 || eid > 999) {
+        printf("Error: Invalid EID (must be between 1 and 999)\n");
+        return;
+    }
+
+    // Alocar buffer grande no HEAP (não na stack!)
+    char *response = malloc(10485760); // 10 MB
+    if (!response) {
+        printf("Error: Memory allocation failed\n");
+        return;
+    }
+    
+    char message[64];
+    size_t total_received = 0;
+
+    snprintf(message, sizeof(message), "%s %s\n",
+             CMD_SHOW, eid_str);
+
+    int tcp_socket = tcp_connect_to_server();
+    if (tcp_socket == -1) {
+        free(response);
+        return;
+    }
+
+    ssize_t sent = write(tcp_socket, message, strlen(message));
+    if (sent != (ssize_t)strlen(message)) {
+        perror("Error sending command");
+        close(tcp_socket);
+        free(response);
+        return;
+    }
+    
+    bool message_complete = false;
+    while (!message_complete && total_received < 10485760 - 1) {
+        
+        ssize_t n = read(tcp_socket, response + total_received, 10485760 - 1 - total_received);
+        
+        if (n <= 0) {
+            if (n == 0) {
+
+            } else {
+                perror("Error reading response");
+            }
+            close(tcp_socket);
+            if (total_received == 0) {
+                printf("Error: No response from server\n");
+                free(response);
+                return;
+            }
+            break;
+        }
+        
+        total_received += n;
+        
+        // Verificar se recebemos o '\n' final
+        if (response[total_received - 1] == '\n') {
+            message_complete = true;
+        }
+    }
+
+    close(tcp_socket);
+    response[total_received] = '\0';
+
+    char rsp_code[4], status[4];
+    if (sscanf(response, "%3s %3s", rsp_code, status) != 2) {
+        printf("Error: Invalid response format\n");
+        free(response);
+        return;
+    }
+
+    if (strcmp(status, STATUS_OK) == 0) {
+        char *ptr = response + 7;  // Saltar "RSE OK "
+        
+        char uid[7], event_name[EVENT_NAME_LEN + 1], fname[25];
+        char event_date[DATE_STR_LEN + 1], event_time[6];;
+        int num_attendees, num_reserved;
+        long fsize;
+        
+        // Parse dos 8 campos de texto
+        int parsed = sscanf(ptr, "%6s %10s %10s %5s %d %d %24s %ld",
+                            uid, event_name, event_date, event_time,
+                            &num_attendees, &num_reserved, fname, &fsize);
+        
+        if (parsed != 8) {
+            printf("Error: Invalid event data format (parsed=%d)\n", parsed);
+            free(response);
+            return;
+        }
+        
+        // Encontrar onde começa o Fdata (depois de 9 espaços)
+        int spaces = 0;
+        char *fdata_ptr = response;
+        
+        while (spaces < 9 && fdata_ptr < response + total_received) {
+            if (*fdata_ptr == ' ') spaces++;
+            fdata_ptr++;
+        }
+        
+        // Calcular tamanho real do Fdata recebido
+        long fdata_received = (response + total_received) - fdata_ptr;
+        if (fdata_received > 0 && response[total_received - 1] == '\n') {
+            fdata_received--; // Não contar o \n final
+        }
+        
+        if (fdata_received < fsize) {
+            printf("Error: Incomplete file (expected=%ld, got=%ld)\n", 
+                   fsize, fdata_received);
+            free(response);
+            return;
+        }
+        
+        // FASE 3: Guardar ficheiro no disco
+        FILE *f = fopen(fname, "wb");
+        if (!f) {
+            printf("Error: Cannot create file '%s'\n", fname);
+            free(response);
+            return;
+        }
+        
+        size_t written = fwrite(fdata_ptr, 1, fsize, f);
+        fclose(f);
+        
+        if (written != (size_t)fsize) {
+            printf("Error: Failed to write complete file\n");
+            free(response);
+            return;
+        }
+        
+        // Mostrar informações
+        printf("\n╔═══════════════════════════════════════════════════╗\n");
+        printf("║           EVENT DETAILS - EID %s               ║\n", eid_str);
+        printf("╠═══════════════════════════════════════════════════╣\n");
+        printf("║  Name:         %-35s║\n", event_name);
+        printf("║  Date & Time:  %s %s%-20s║\n", event_date, event_time, "");
+        printf("║  Owner:        %-35s║\n", uid);
+        printf("╠═══════════════════════════════════════════════════╣\n");
+        printf("║  Total Seats:     %-28d    ║\n", num_attendees);
+        printf("║  Reserved:        %-28d    ║\n", num_reserved);
+        printf("║  Available:       %-28d    ║\n", num_attendees - num_reserved);
+        printf("╠═══════════════════════════════════════════════════╣\n");
+        
+        // Determinar status (sold-out?)
+        if (num_reserved >= num_attendees) {
+            printf("║  Status:       🔴 SOLD OUT                        ║\n");
+        } else {
+            printf("║  Status:       🟢 OPEN                            ║\n");
+        }
+        
+        printf("╠═══════════════════════════════════════════════════╣\n");
+        printf("║  File:         %-35s║\n", fname);
+        printf("║  Size:         %-25ld bytes    ║\n", fsize);
+        printf("║  Saved to:     ./%s%-30s║\n", fname, "");
+        printf("╚═══════════════════════════════════════════════════╝\n\n");
+        
+    } else if (strcmp(status, STATUS_NOK) == 0) {
+        printf("Error: Event does not exist\n");
+    } else {
+        printf("Unknown response: %s\n", response);
+    }
+    
+    free(response);
+}
+
 
 CommandType parse_command_type(const char* command) {
 
@@ -870,6 +1046,7 @@ CommandType parse_command_type(const char* command) {
     if (strcmp(command, "list") == 0) return CMD_TYPE_LIST;
     if (strcmp(command, "unregister") == 0) return CMD_TYPE_UNREGISTER;
     if (strcmp(command, "changePass") == 0) return CMD_TYPE_CHANGE_PASSWORD;
+    if (strcmp(command, "show") ==0) return CMD_TYPE_SHOW;
     if (strcmp(command, "help") == 0) return CMD_TYPE_HELP;
     if (strcmp(command, "exit") == 0 || strcmp(command, "quit") == 0) return CMD_TYPE_EXIT;
     return CMD_TYPE_UNKNOWN;
@@ -981,6 +1158,13 @@ int main(int argc, char *argv[]) {
                 }
                 else {
                     printf("Usage: list\n");
+                }
+                break;
+            case CMD_TYPE_SHOW:
+                if (parsed == 2) {
+                    cmd_show(arg1);
+                } else {
+                    printf("Usage: show EID\n");
                 }
                 break;
             case CMD_TYPE_HELP:

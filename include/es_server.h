@@ -18,7 +18,8 @@
 #define FILENAME_LEN 24
 #define MAX_FILE_SIZE 10000000 // 10 MB
 #define ARRAY_SIZE 128
-#define DATE_STR_LEN 10 
+#define DATE_STR_LEN 10 // dd-mm-yyyy
+#define TIME_STR_LEN 5  // HH:MM
 
 // Estruturas de dados
 
@@ -33,6 +34,7 @@ typedef struct {
     char uid[UID_LEN + 1];
     char name[EVENT_NAME_LEN + 1];
     char date[DATE_STR_LEN + 1]; // dd-mm-yyyy
+    char time[TIME_STR_LEN + 1]; // HH:MM
     int total_seats;
     int reserved_seats;
     char filename[FILENAME_LEN + 1];

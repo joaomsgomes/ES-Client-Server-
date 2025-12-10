@@ -45,8 +45,8 @@ int create_event(Event *ev) {
     
     // Escrever: UID name desc_fname total_seats start_date start_time
     // Nota: o enunciado usa dd-mm-yyyy HH:MM mas vou seguir o protocolo dd-mm-yyyy
-    fprintf(fp, "%s %s %s %d %s 00:00\n",
-            ev->uid, ev->name, ev->filename, ev->total_seats, ev->date);
+    fprintf(fp, "%s %s %s %d %s %s\n",
+            ev->uid, ev->name, ev->filename, ev->total_seats, ev->date, ev->time);
     fclose(fp);
     
     // Criar ficheiro RES_eid.txt com valor 0
@@ -113,9 +113,8 @@ int get_event(int eid, Event *ev) {
         return -1;
     }
     
-    char time_str[16];
-    if (fscanf(fp, "%6s %10s %24s %d %10s %15s",
-               ev->uid, ev->name, ev->filename, &ev->total_seats, ev->date, time_str) != 6) {
+    if (fscanf(fp, "%6s %10s %24s %d %10s %5s",
+               ev->uid, ev->name, ev->filename, &ev->total_seats, ev->date, ev->time) != 6) {
         fclose(fp);
         return -1;
     }
@@ -141,6 +140,47 @@ int get_event(int eid, Event *ev) {
         ev->state = 3; // Fechado
     } else {
         ev->state = 1; // Ativo
+    }
+    
+    // Carregar ficheiro de descrição
+    char desc_path[128];
+    snprintf(desc_path, sizeof(desc_path), "EVENTS/%03d/DESCRIPTION/%s", eid, ev->filename);
+    
+    fp = fopen(desc_path, "rb");
+    if (!fp) {
+        ev->file_size = 0;
+        ev->filedata = NULL;
+        return -1; // Ficheiro obrigatório para show
+    }
+    
+    // Obter tamanho do ficheiro
+    fseek(fp, 0, SEEK_END);
+    ev->file_size = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+    
+    if (ev->file_size <= 0) {
+        fclose(fp);
+        ev->filedata = NULL;
+        ev->file_size = 0;
+        return -1;
+    }
+    
+    // Alocar e ler dados
+    ev->filedata = malloc(ev->file_size);
+    if (!ev->filedata) {
+        fclose(fp);
+        ev->file_size = 0;
+        return -1;
+    }
+    
+    size_t read_bytes = fread(ev->filedata, 1, ev->file_size, fp);
+    fclose(fp);
+    
+    if (read_bytes != (size_t)ev->file_size) {
+        free(ev->filedata);
+        ev->filedata = NULL;
+        ev->file_size = 0;
+        return -1;
     }
     
     return 0;
@@ -237,6 +277,7 @@ int get_event_state(int eid) {
     
     return 1; // Ativo
 }
+
 
 /**
  * Fecha um evento

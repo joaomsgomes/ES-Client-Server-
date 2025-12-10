@@ -643,156 +643,145 @@ void cmd_mye() {
 
 void cmd_list() {
 
-    char message[64];
-    char response[8192];
-    size_t total_received = 0;
-    
     if (!client_state.is_logged_in) {
         printf("Error: User needs to be logged in to view all available events\n");
         return;
     }
 
+    char message[16];
     snprintf(message, sizeof(message), "%s\n", CMD_LIST);
-    
-    
-    // Conectar ao servidor TCP
+
     int tcp_socket = tcp_connect_to_server();
-    if (tcp_socket == -1) {
-        return;
-    }
-    
-    
-    // Enviar comando
+    if (tcp_socket == -1) return;
+
     ssize_t sent = write(tcp_socket, message, strlen(message));
     if (sent != (ssize_t)strlen(message)) {
         perror("Error sending command");
         close(tcp_socket);
         return;
     }
-    
-    
-    // Ler resposta em loop até encontrar '\n' ou buffer cheio
-    bool message_complete = false;
-    while (!message_complete && total_received < sizeof(response) - 1) {
 
-        ssize_t n = read(tcp_socket, response + total_received, sizeof(response) - 1 - total_received);
-        
-        if (n <= 0) {
-            if (n == 0) {
 
-            } else {
-                perror("Error reading response");
-            }
-            close(tcp_socket);
-            if (total_received == 0) {
-                printf("Error: No response from server\n");
-                return;
-            }
+    char recv_buf[128];      // Buffer de leitura do socket
+    char tail[64] = "";     // Buffer auxiliar para dados TRUNCADOS
+    size_t tail_len = 0;
+
+    bool got_header = false;
+    int event_count = 0;
+    int iteration = 0;
+
+    while (1) {
+        iteration++;
+
+        ssize_t n = read(tcp_socket, recv_buf, sizeof(recv_buf) - 1);
+        if (n < 0) {
+            perror("Error reading from server");
+            break;
+        } else if (n == 0) {
+            break;
+        }
+        recv_buf[n] = '\0';
+
+        // Criar buffer de trabalho: tail (dados anteriores) + recv_buf (novos dados)
+        char work_buf[512];
+        if (tail_len + (size_t)n >= sizeof(work_buf)) {
+            fprintf(stderr, "Error: work_buf overflow\n");
             break;
         }
         
-        total_received += n;
+        memcpy(work_buf, tail, tail_len);
+        memcpy(work_buf + tail_len, recv_buf, n);
+        work_buf[tail_len + n] = '\0';
+        size_t work_len = tail_len + n;
         
-        // Verificar se recebemos o '\n' final
-        if (response[total_received - 1] == '\n') {
-            message_complete = true;
-        }
-        
-    }
-    
-    close(tcp_socket);
-    response[total_received] = '\0';
-    
-    
-    // Parse resposta
-    char rsp_code[4], status[4];
-    if (sscanf(response, "%3s %3s", rsp_code, status) != 2) {
-        printf("Error: Invalid response format\n");
-        return;
-    }
-    
-    // Processar status
-    if (strcmp(status, STATUS_OK) == 0) {
-        // Parse da lista de eventos
-        char *ptr = response + 7;  // Saltar "RLS OK "
-        int event_count = 0;
-        
-        printf("\n╔═════════════════════════════════════════════════════════════════════════╗\n");
-        printf("║                         ALL AVAILABLE EVENTS                            ║\n");
-        printf("╠═════════════════════════════════════════════════════════════════════════╣\n");
-        printf("║  EID  │  Name       │  Status                      │  Date & Time      ║\n");
-        printf("╠═══════╪═════════════╪══════════════════════════════╪═══════════════════╣\n");
-        
-        int eid, state;
-        char event_name[EVENT_NAME_LEN + 1];
-        char event_date[DATE_STR_LEN + 1];
-        char event_time[6]; 
-        
-        // Formato: EID name state date time
-        while (sscanf(ptr, "%d %10s %d %10s %5s", 
-                      &eid, event_name, &state, event_date, event_time) == 5) {
-            event_count++;
-            
-            const char *status_str;
-            
-            
-            switch (state) {
-                case 0:
-                    status_str = "Past";
-                    break;
-                case 1:
-                    status_str = "Active";                   
-                    break;
-                case 2:
-                    status_str = "Sold Out";
-                    break;
-                case 3:
-                    status_str = "Closed";
-                    break;
-                default:
-                    status_str = "Unknown";
-                    break;
+
+        size_t pos = 0;
+
+        if (!got_header) {
+            if (work_len < 7) {
+                memcpy(tail, work_buf, work_len);
+                tail_len = work_len;
+                continue;
             }
-            
-            printf("║  %03d  │  %-10s │  %-27s │  %s %s  ║\n", 
-                   eid, event_name, status_str, event_date, event_time);
-            
-            // Avançar para próximo evento (5 campos)
-            // Saltar EID
-            while (*ptr && *ptr != ' ') ptr++;
-            if (*ptr) ptr++;
-            
-            // Saltar name
-            while (*ptr && *ptr != ' ') ptr++;
-            if (*ptr) ptr++;
-            
-            // Saltar state
-            while (*ptr && *ptr != ' ') ptr++;
-            if (*ptr) ptr++;
-            
-            // Saltar date
-            while (*ptr && *ptr != ' ') ptr++;
-            if (*ptr) ptr++;
-            
-            // Saltar time
-            while (*ptr && *ptr != ' ' && *ptr != '\n') ptr++;
-            if (*ptr == ' ') ptr++;
+
+            char rsp[4], status[4];
+            int consumed = 0;
+            if (sscanf(work_buf, "%3s %3s %n", rsp, status, &consumed) != 2) {
+                fprintf(stderr, "Error: invalid LIST header\n");
+                break;
+            }
+
+
+            if (strcmp(rsp, RSP_LIST) != 0 || strcmp(status, STATUS_OK) != 0) {
+                if (strcmp(status, STATUS_NOK) == 0) {
+                    printf("No events available.\n");
+                } else {
+                    fprintf(stderr, "Error: Unexpected response\n");
+                }
+                close(tcp_socket);
+                return;
+            }
+
+            got_header = true;
+            pos = (size_t)consumed;
         }
-        
-        printf("╠═════════════════════════════════════════════════════════════════════════╣\n");
-        printf("║  Total: %-3d event(s)                                                    ║\n", event_count);
-        printf("╚═════════════════════════════════════════════════════════════════════════╝\n\n");
-        
-    } else if (strcmp(status, STATUS_NOK) == 0) {
-        printf("No events available yet\n");
-        
-    } else if (strcmp(status, STATUS_ERR) == 0) {
-        printf("Error: Invalid request format\n");
-        
-    } else {
-        printf("Unknown response: %s\n", response);
+
+        int events_this_iter = 0;
+        while (pos < work_len) {
+            // Verificar se encontramos o '\n' final
+            if (work_buf[pos] == '\n') {
+                close(tcp_socket);
+                printf("Total events listed: %d\n", event_count);
+                return;
+            }
+
+            int eid, state, consumed = 0;
+            char name[EVENT_NAME_LEN + 1];
+            char date[DATE_STR_LEN + 1];
+            char time[6];
+
+            int rc = sscanf(work_buf + pos, "%d %10s %d %10s %5s %n",
+                           &eid, name, &state, date, time, &consumed);
+
+
+            if (rc == 5 && consumed > 0 && strlen(time) == 5 && time[2] == ':') {
+                // Evento COMPLETO!
+                event_count++;
+                events_this_iter++;
+
+                const char *status_str;
+                if (state == 0) status_str = "Past";
+                else if (state == 1) status_str = "Active";
+                else if (state == 2) status_str = "Sold Out";
+                else if (state == 3) status_str = "Closed";
+                else status_str = "Unknown";
+
+                printf("EID: %03d | Name: %s | State: %s | Date: %s %s\n",
+                       eid, name, status_str, date, time);
+
+                pos += (size_t)consumed;
+            } else {
+                break;
+            }
+        }
+
+        /* 3) GUARDAR RESTO NO TAIL */
+        tail_len = work_len - pos;
+        if (tail_len > 0) {
+            if (tail_len >= sizeof(tail)) {
+                fprintf(stderr, "Error: tail overflow (%zu bytes)\n", tail_len);
+                break;
+            }
+            memcpy(tail, work_buf + pos, tail_len);
+            tail[tail_len] = '\0';
+        }
     }
+
+    close(tcp_socket);
+    printf("Total events listed: %d\n", event_count);
 }
+
+
 
 
 CommandType parse_command_type(const char* command) {

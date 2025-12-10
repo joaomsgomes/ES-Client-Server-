@@ -71,14 +71,14 @@ int main(void) {
     init_file_system();
     printf("ES Server started on UDP port %s\n", MYPORT);
 
-    // TCP SETUP AND SERVER SECTION
+    // TCP SETUP AND SERVER SECTION (mesma porta que UDP)
 
     memset(&inputs, 0, sizeof(inputs));
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE | AI_NUMERICSERV;
 
-    getaddrinfo(NULL, "58001", &hints, &res);
+    getaddrinfo(NULL, MYPORT, &hints, &res);
     tfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
     bind(tfd, res->ai_addr, res->ai_addrlen);
     
@@ -89,6 +89,8 @@ int main(void) {
     }
     
     freeaddrinfo(res);
+    
+    printf("ES Server: TCP listening on port %s\n", MYPORT);
 
     FD_ZERO(&inputs); // Clear input mask
     FD_SET(0, &inputs); // Set standard input channel on
@@ -105,8 +107,7 @@ int main(void) {
         timeout.tv_sec=10;
 
         out_fds=select(max_fd+1,&testfds,(fd_set *)NULL,(fd_set *)NULL,(struct timeval *) &timeout);
-    // testfds is now '1' at the positions that were activated by FD_SET
-    //        printf("testfds byte: %d\n",((char *)&testfds)[0]); // Debug
+        // testfds is now '1' at the positions that were activated by FD_SET
 
         switch(out_fds)
         {
@@ -131,10 +132,10 @@ int main(void) {
                 // Input done by UDP socket
                 if(FD_ISSET(ufd,&testfds)) {
                     addrlen = sizeof(_useraddr);
-                    ret=recvfrom(ufd,prt_str,80,0,(struct sockaddr *)&_useraddr,&addrlen);
+                    ret = recvfrom(ufd,prt_str,80,0,(struct sockaddr *)&_useraddr,&addrlen);
                     if(ret>0)
                     {
-                        prt_str[ret]='\0'; // Null terminate
+                        prt_str[ret]='\0';
                         printf("---UDP received: %s",prt_str);
                         errcode=getnameinfo( (struct sockaddr *) &_useraddr,addrlen,host,sizeof host, service,sizeof service,0);
                         if(errcode==0)
@@ -180,7 +181,7 @@ int main(void) {
                             printf("[TCP] ERROR: Memory allocation failed\n");
                             close(client_fd);
                         } else {
-                            ssize_t bytes_read = recv(client_fd, tcp_buffer, MAX_FILE_SIZE + 1024, 0);
+                            ssize_t bytes_read = read(client_fd, tcp_buffer, MAX_FILE_SIZE + 1024);
                             
                             if (bytes_read > 0) {
                                 tcp_buffer[bytes_read] = '\0'; 

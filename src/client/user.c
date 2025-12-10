@@ -24,7 +24,9 @@ static struct {
     char logged_uid[7];
     char logged_password[9];
     bool is_logged_in;
-} client_state = {-1, NULL, "000000", "00000000", false};
+    char server_ip[128];
+    char server_tcp_port[8];
+} client_state = {-1, NULL, "000000", "00000000", false, "localhost", "58001"};
 
 /**
  * Inicializa conexão UDP com o servidor
@@ -32,6 +34,10 @@ static struct {
 bool init_udp_connection(const char* server_ip, const char* server_port) {
     struct addrinfo hints;
     int errcode;
+    
+    // Guardar IP e porta TCP do servidor (mesma porta que UDP)
+    strncpy(client_state.server_ip, server_ip, sizeof(client_state.server_ip) - 1);
+    strncpy(client_state.server_tcp_port, server_port, sizeof(client_state.server_tcp_port) - 1);
     
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;
@@ -84,6 +90,41 @@ bool send_udp_receive_response(const char* message, char* response, size_t respo
     
     response[n] = '\0';
     return true;
+}
+
+/**
+ * Estabelece conexão TCP com o servidor
+ * Retorna o socket TCP conectado, ou -1 em caso de erro
+ */
+int tcp_connect_to_server() {
+    struct addrinfo hints, *tcp_res;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    
+    int errcode = getaddrinfo(client_state.server_ip, client_state.server_tcp_port, &hints, &tcp_res);
+    if (errcode != 0) {
+        fprintf(stderr, "Error: getaddrinfo TCP: %s\n", gai_strerror(errcode));
+        return -1;
+    }
+    
+    int tcp_socket = socket(tcp_res->ai_family, tcp_res->ai_socktype, tcp_res->ai_protocol);
+    if (tcp_socket == -1) {
+        perror("Error creating TCP socket");
+        freeaddrinfo(tcp_res);
+        return -1;
+    }
+    
+    
+    if (connect(tcp_socket, tcp_res->ai_addr, tcp_res->ai_addrlen) == -1) {
+        perror("Error connecting to TCP server");
+        close(tcp_socket);
+        freeaddrinfo(tcp_res);
+        return -1;
+    }
+    
+    freeaddrinfo(tcp_res);
+    return tcp_socket;
 }
 
 /**
@@ -226,7 +267,7 @@ void cmd_unregister() {
 }
 
 
-void cmd_create(const char* name, const char* event_fname, const char* event_date, int num_attendees) {
+void cmd_create(const char* name, const char* event_fname, const char* event_date, const char* event_time, int num_attendees) {
     // Verificar se está logado
     if (!client_state.is_logged_in) {
         printf("Error: You must be logged in to create events\n");
@@ -242,6 +283,12 @@ void cmd_create(const char* name, const char* event_fname, const char* event_dat
     if (!validate_date(event_date)) {
         printf("Event date: %s\n", event_date);
         printf("Error: Invalid date format (use dd-mm-yyyy)\n");
+        return;
+    }
+    
+    // Validar formato da hora (hh:mm)
+    if (strlen(event_time) != 5 || event_time[2] != ':') {
+        printf("Error: Invalid time format (use hh:mm)\n");
         return;
     }
     
@@ -287,10 +334,9 @@ void cmd_create(const char* name, const char* event_fname, const char* event_dat
         return;
     }
     
-    // Extrair apenas o nome do ficheiro (sem path)
     const char *fname = strrchr(event_fname, '/');
     if (fname) {
-        fname++; // Avançar após '/'
+        fname++;
     } else {
         fname = event_fname;
     }
@@ -301,45 +347,21 @@ void cmd_create(const char* name, const char* event_fname, const char* event_dat
         return;
     }
     
-    printf("Creating event '%s' with file '%s' (%ld bytes)...\n", name, fname, filesize);
+    printf("Creating event '%s' on %s %s with %d seats...\n", name, event_date, event_time, num_attendees);
     
-    // Conectar ao servidor TCP (porta 58001)
-    struct addrinfo hints, *tcp_res;
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_STREAM;
-    
-    int errcode = getaddrinfo("localhost", "58001", &hints, &tcp_res);
-    if (errcode != 0) {
-        fprintf(stderr, "Error: getaddrinfo TCP: %s\n", gai_strerror(errcode));
-        free(filedata);
-        return;
-    }
-    
-    int tcp_socket = socket(tcp_res->ai_family, tcp_res->ai_socktype, tcp_res->ai_protocol);
+    // Conectar ao servidor TCP
+    int tcp_socket = tcp_connect_to_server();
     if (tcp_socket == -1) {
-        perror("Error creating TCP socket");
-        freeaddrinfo(tcp_res);
         free(filedata);
         return;
     }
     
-    if (connect(tcp_socket, tcp_res->ai_addr, tcp_res->ai_addrlen) == -1) {
-        perror("Error connecting to TCP server");
-        close(tcp_socket);
-        freeaddrinfo(tcp_res);
-        free(filedata);
-        return;
-    }
     
-    freeaddrinfo(tcp_res);
-    
-    // Construir comando: "CRE UID password name date attendance Fname Fsize Fdata\n"
     char header[256];
     int header_len = snprintf(header, sizeof(header),
-                              "%s %s %s %s %s %d %s %ld ",
+                              "%s %s %s %s %s %s %d %s %ld ",
                               CMD_CREATE, client_state.logged_uid, client_state.logged_password,
-                              name, event_date, num_attendees, fname, filesize);
+                              name, event_date, event_time, num_attendees, fname, filesize);
     
     if (header_len < 0 || header_len >= (int)sizeof(header)) {
         printf("Error: Command header too long\n");
@@ -348,35 +370,36 @@ void cmd_create(const char* name, const char* event_fname, const char* event_dat
         return;
     }
     
-    // Enviar header
-    ssize_t sent = send(tcp_socket, header, header_len, 0);
-    if (sent != header_len) {
-        perror("Error sending command header");
+    // Alocar buffer para mensagem completa (header + filedata + newline)
+    size_t total_size = header_len + filesize + 1;
+    char *full_message = malloc(total_size);
+    if (!full_message) {
+        printf("Error: Memory allocation failed for message\n");
         close(tcp_socket);
         free(filedata);
         return;
     }
     
-    // Enviar filedata (dados binários)
+    // Montar mensagem completa
+    memcpy(full_message, header, header_len);
+    memcpy(full_message + header_len, filedata, filesize);
+    full_message[header_len + filesize] = '\n';
+
     size_t total_sent = 0;
-    while (total_sent < (size_t)filesize) {
-        ssize_t n = send(tcp_socket, filedata + total_sent, filesize - total_sent, 0);
+
+    while (total_sent < total_size) {
+        
+        ssize_t n = write(tcp_socket, full_message + total_sent, total_size - total_sent);
         if (n <= 0) {
-            perror("Error sending file data");
+            perror("Error sending data");
             close(tcp_socket);
             free(filedata);
+            free(full_message);
             return;
         }
         total_sent += n;
     }
-    
-    // Enviar newline final
-    if (send(tcp_socket, "\n", 1, 0) != 1) {
-        perror("Error sending final newline");
-        close(tcp_socket);
-        free(filedata);
-        return;
-    }
+    free(full_message);
     
     free(filedata);
     
@@ -384,7 +407,7 @@ void cmd_create(const char* name, const char* event_fname, const char* event_dat
     
     // Receber resposta: "RCE status [EID]\n"
     char response[64];
-    ssize_t resp_len = recv(tcp_socket, response, sizeof(response) - 1, 0);
+    ssize_t resp_len = read(tcp_socket, response, sizeof(response) - 1);
     close(tcp_socket);
     
     if (resp_len <= 0) {
@@ -408,16 +431,16 @@ void cmd_create(const char* name, const char* event_fname, const char* event_dat
         printf("✓ Event created successfully!\n");
         printf("  EID: %s\n", eid);
         printf("  Name: %s\n", name);
-        printf("  Date: %s\n", event_date);
+        printf("  Date: %s %s\n", event_date, event_time);
         printf("  Attendees: %d\n", num_attendees);
     } else if (strcmp(status, STATUS_NOK) == 0) {
-        printf("✗ Error: Failed to create event (database full?)\n");
+        printf("Error: Failed to create event (database full?)\n");
     } else if (strcmp(status, STATUS_NLG) == 0) {
-        printf("✗ Error: User not logged in or not found\n");
+        printf("Error: User not logged in or not found\n");
     } else if (strcmp(status, STATUS_WRP) == 0) {
-        printf("✗ Error: Wrong password\n");
+        printf("Error: Wrong password\n");
     } else if (strcmp(status, STATUS_ERR) == 0) {
-        printf("✗ Error: Invalid command format\n");
+        printf("Error: Invalid command format\n");
     } else {
         printf("Unknown response: %s\n", response);
     }
@@ -445,33 +468,11 @@ void cmd_close(const char* eid_str) {
     
     printf("Closing event EID=%03d...\n", eid);
     
-    // Conectar ao servidor TCP (porta 58001)
-    struct addrinfo hints, *tcp_res;
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_STREAM;
-    
-    int errcode = getaddrinfo("localhost", "58001", &hints, &tcp_res);
-    if (errcode != 0) {
-        fprintf(stderr, "Error: getaddrinfo TCP: %s\n", gai_strerror(errcode));
-        return;
-    }
-    
-    int tcp_socket = socket(tcp_res->ai_family, tcp_res->ai_socktype, tcp_res->ai_protocol);
+    // Conectar ao servidor TCP
+    int tcp_socket = tcp_connect_to_server();
     if (tcp_socket == -1) {
-        perror("Error creating TCP socket");
-        freeaddrinfo(tcp_res);
         return;
     }
-    
-    if (connect(tcp_socket, tcp_res->ai_addr, tcp_res->ai_addrlen) == -1) {
-        perror("Error connecting to TCP server");
-        close(tcp_socket);
-        freeaddrinfo(tcp_res);
-        return;
-    }
-    
-    freeaddrinfo(tcp_res);
     
     // Construir comando: "CLS UID password EID\n"
     char command[128];
@@ -487,18 +488,17 @@ void cmd_close(const char* eid_str) {
     }
     
     // Enviar comando
-    ssize_t sent = send(tcp_socket, command, cmd_len, 0);
+    ssize_t sent = write(tcp_socket, command, cmd_len);
     if (sent != cmd_len) {
         perror("Error sending command");
         close(tcp_socket);
         return;
     }
     
-    printf("Command sent, waiting for response...\n");
     
     // Receber resposta: "RCL status\n"
     char response[64];
-    ssize_t resp_len = recv(tcp_socket, response, sizeof(response) - 1, 0);
+    ssize_t resp_len = read(tcp_socket, response, sizeof(response) - 1);
     close(tcp_socket);
     
     if (resp_len <= 0) {
@@ -522,21 +522,21 @@ void cmd_close(const char* eid_str) {
         printf("✓ Event closed successfully!\n");
         printf("  EID %03d is now closed for new reservations\n", eid);
     } else if (strcmp(status, STATUS_NOK) == 0) {
-        printf("✗ Error: User does not exist or wrong password\n");
+        printf("Error: User does not exist or wrong password\n");
     } else if (strcmp(status, STATUS_NLG) == 0) {
-        printf("✗ Error: User not logged in\n");
+        printf("Error: User not logged in\n");
     } else if (strcmp(status, STATUS_NOE) == 0) {
-        printf("✗ Error: Event does not exist (EID=%03d)\n", eid);
+        printf("Error: Event does not exist (EID=%03d)\n", eid);
     } else if (strcmp(status, STATUS_EOW) == 0) {
-        printf("✗ Error: You are not the owner of this event\n");
+        printf("Error: You are not the owner of this event\n");
     } else if (strcmp(status, STATUS_SLD) == 0) {
-        printf("ℹ Event is already sold-out (all seats reserved)\n");
+        printf("Event is already sold-out (all seats reserved)\n");
     } else if (strcmp(status, STATUS_PST) == 0) {
-        printf("ℹ Event date has already passed\n");
+        printf("Event date has already passed\n");
     } else if (strcmp(status, STATUS_CLO) == 0) {
-        printf("ℹ Event has been closed\n");
+        printf("Event has been closed\n");
     } else if (strcmp(status, STATUS_ERR) == 0) {
-        printf("✗ Error: Invalid command format\n");
+        printf("Error: Invalid command format\n");
     } else {
         printf("Unknown response: %s\n", response);
     }
@@ -643,59 +643,66 @@ void cmd_mye() {
 
 void cmd_list() {
 
-
     char message[64];
-    char response[8192];  // Buffer grande para múltiplos eventos
+    char response[8192];
+    size_t total_received = 0;
     
-    // Construir mensagem: "LST\n"
+    if (!client_state.is_logged_in) {
+        printf("Error: User needs to be logged in to view all available events\n");
+        return;
+    }
+
     snprintf(message, sizeof(message), "%s\n", CMD_LIST);
     
-    // Conectar ao servidor TCP (porta 58001)
-    struct addrinfo hints, *tcp_res;
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_STREAM;
     
-    int errcode = getaddrinfo("localhost", "58001", &hints, &tcp_res);
-    if (errcode != 0) {
-        fprintf(stderr, "Error: getaddrinfo TCP: %s\n", gai_strerror(errcode));
-        return;
-    }
-    
-    int tcp_socket = socket(tcp_res->ai_family, tcp_res->ai_socktype, tcp_res->ai_protocol);
+    // Conectar ao servidor TCP
+    int tcp_socket = tcp_connect_to_server();
     if (tcp_socket == -1) {
-        perror("Error creating TCP socket");
-        freeaddrinfo(tcp_res);
         return;
     }
     
-    if (connect(tcp_socket, tcp_res->ai_addr, tcp_res->ai_addrlen) == -1) {
-        perror("Error connecting to TCP server");
-        close(tcp_socket);
-        freeaddrinfo(tcp_res);
-        return;
-    }
-    
-    freeaddrinfo(tcp_res);
     
     // Enviar comando
-    ssize_t sent = send(tcp_socket, message, strlen(message), 0);
+    ssize_t sent = write(tcp_socket, message, strlen(message));
     if (sent != (ssize_t)strlen(message)) {
         perror("Error sending command");
         close(tcp_socket);
         return;
     }
     
-    // Receber resposta: "RLS status [EID name state event_date event_time]*\n"
-    ssize_t resp_len = recv(tcp_socket, response, sizeof(response) - 1, 0);
-    close(tcp_socket);
     
-    if (resp_len <= 0) {
-        printf("Error: No response from server\n");
-        return;
+    // Ler resposta em loop até encontrar '\n' ou buffer cheio
+    bool message_complete = false;
+    while (!message_complete && total_received < sizeof(response) - 1) {
+
+        ssize_t n = read(tcp_socket, response + total_received, sizeof(response) - 1 - total_received);
+        
+        if (n <= 0) {
+            if (n == 0) {
+
+            } else {
+                perror("Error reading response");
+            }
+            close(tcp_socket);
+            if (total_received == 0) {
+                printf("Error: No response from server\n");
+                return;
+            }
+            break;
+        }
+        
+        total_received += n;
+        
+        // Verificar se recebemos o '\n' final
+        if (response[total_received - 1] == '\n') {
+            message_complete = true;
+        }
+        
     }
     
-    response[resp_len] = '\0';
+    close(tcp_socket);
+    response[total_received] = '\0';
+    
     
     // Parse resposta
     char rsp_code[4], status[4];
@@ -840,8 +847,8 @@ int main(int argc, char *argv[]) {
         input[strcspn(input, "\n")] = '\0';
         
         
-        char arg3[32], arg4[256];
-        int parsed = sscanf(input, "%31s %31s %31s %31s %255s", command, arg1, arg2, arg3, arg4);
+        char arg3[32], arg4[32], arg5[256];
+        int parsed = sscanf(input, "%31s %31s %31s %31s %31s %255s", command, arg1, arg2, arg3, arg4, arg5);
         
         if (parsed == 0) {
             continue; // Linha vazia
@@ -873,12 +880,11 @@ int main(int argc, char *argv[]) {
                 }
                 break;
             case CMD_TYPE_CREATE:
-                if (parsed == 5) {
-                    int num_attendees = atoi(arg4);
-                    cmd_create(arg1, arg2, arg3, num_attendees);
+                if (parsed == 6) {
+                    int num_attendees = atoi(arg5);
+                    cmd_create(arg1, arg2, arg3, arg4, num_attendees);
                 } else {
-                    printf("Usage: create name event_fname event_date num_attendees\n");
-                    printf("Example: create Concert poster.jpg 31-12-2025 500\n");
+                    printf("Usage: create name event_fname event_date event_time num_attendees\n");
                 }
                 break;
             case CMD_TYPE_CLOSE:

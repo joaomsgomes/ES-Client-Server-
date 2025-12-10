@@ -28,7 +28,7 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
     if (parsed != 8) {
         // Formato inválido
         snprintf(response, sizeof(response), "%s %s\n", RSP_CREATE, STATUS_ERR);
-        send(client_fd, response, strlen(response), 0);
+        write(client_fd, response, strlen(response));
         printf("[TCP] CREATE: Invalid format (parsed=%d)\n", parsed);
         return;
     }
@@ -36,35 +36,35 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
     // Validar parâmetros
     if (!validate_uid(uid) || !validate_password(password)) {
         snprintf(response, sizeof(response), "%s %s\n", RSP_CREATE, STATUS_ERR);
-        send(client_fd, response, strlen(response), 0);
+        write(client_fd, response, strlen(response));
         printf("[TCP] CREATE: Invalid UID or password format\n");
         return;
     }
     
     if (!validate_event_name(name)) {
         snprintf(response, sizeof(response), "%s %s\n", RSP_CREATE, STATUS_ERR);
-        send(client_fd, response, strlen(response), 0);
+        write(client_fd, response, strlen(response));
         printf("[TCP] CREATE: Invalid event name\n");
         return;
     }
     
     if (!validate_date(date)) {
         snprintf(response, sizeof(response), "%s %s\n", RSP_CREATE, STATUS_ERR);
-        send(client_fd, response, strlen(response), 0);
+        write(client_fd, response, strlen(response));
         printf("[TCP] CREATE: Invalid date format\n");
         return;
     }
     
     if (attendance < 10 || attendance > 999) {
         snprintf(response, sizeof(response), "%s %s\n", RSP_CREATE, STATUS_ERR);
-        send(client_fd, response, strlen(response), 0);
+        write(client_fd, response, strlen(response));
         printf("[TCP] CREATE: Invalid attendance (%d)\n", attendance);
         return;
     }
     
     if (filesize <= 0 || filesize > MAX_FILE_SIZE) {
         snprintf(response, sizeof(response), "%s %s\n", RSP_CREATE, STATUS_ERR);
-        send(client_fd, response, strlen(response), 0);
+        write(client_fd, response, strlen(response));
         printf("[TCP] CREATE: Invalid file size (%ld)\n", filesize);
         return;
     }
@@ -75,7 +75,7 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
     if (auth_result == 0) {
         // Utilizador não existe
         snprintf(response, sizeof(response), "%s %s\n", RSP_CREATE, STATUS_NLG);
-        send(client_fd, response, strlen(response), 0);
+        write(client_fd, response, strlen(response));
         printf("[TCP] CREATE: User not found (UID=%s)\n", uid);
         return;
     }
@@ -83,7 +83,7 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
     if (auth_result == -1) {
         // Password incorreta
         snprintf(response, sizeof(response), "%s %s\n", RSP_CREATE, STATUS_WRP);
-        send(client_fd, response, strlen(response), 0);
+        write(client_fd, response, strlen(response));
         printf("[TCP] CREATE: Wrong password (UID=%s)\n", uid);
         return;
     }
@@ -109,7 +109,7 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
     if (remaining_bytes < filesize) {
         // Faltam dados - precisamos ler mais do socket
         snprintf(response, sizeof(response), "%s %s\n", RSP_CREATE, STATUS_ERR);
-        send(client_fd, response, strlen(response), 0);
+        write(client_fd, response, strlen(response));
         printf("[TCP] CREATE: Incomplete file data (expected=%ld, got=%ld)\n", 
                filesize, remaining_bytes);
         return;
@@ -119,7 +119,7 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
     unsigned char *filedata = malloc(filesize);
     if (!filedata) {
         snprintf(response, sizeof(response), "%s %s\n", RSP_CREATE, STATUS_NOK);
-        send(client_fd, response, strlen(response), 0);
+        write(client_fd, response, strlen(response));
         printf("[TCP] CREATE: Memory allocation failed\n");
         return;
     }
@@ -155,7 +155,7 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
     
     if (rc != 0) {
         snprintf(response, sizeof(response), "%s %s\n", RSP_CREATE, STATUS_NOK);
-        send(client_fd, response, strlen(response), 0);
+        write(client_fd, response, strlen(response));
         free(filedata);
         printf("[TCP] CREATE: Failed to create event\n");
         return;
@@ -163,7 +163,7 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
     
     // Sucesso! Retornar EID gerado
     snprintf(response, sizeof(response), "%s %s %03d\n", RSP_CREATE, STATUS_OK, ev.eid);
-    send(client_fd, response, strlen(response), 0);
+    write(client_fd, response, strlen(response));
     
     free(filedata);
     
@@ -189,20 +189,20 @@ void handle_close_event(int client_fd, char* buffer, ssize_t n) {
     
     if (parsed != 4) {
         snprintf(response, sizeof(response), "%s %s\n", RSP_CLOSE, STATUS_ERR);
-        send(client_fd, response, strlen(response), 0);
+        write(client_fd, response, strlen(response));
         printf("[TCP] CLOSE: Invalid format\n");
         return;
     }
     
     if (!validate_uid(uid) || !validate_password(password)) {
         snprintf(response, sizeof(response), "%s %s\n", RSP_CLOSE, STATUS_ERR);
-        send(client_fd, response, strlen(response), 0);
+        write(client_fd, response, strlen(response));
         return;
     }
     
     if (eid < 1 || eid > 999) {
         snprintf(response, sizeof(response), "%s %s\n", RSP_CLOSE, STATUS_ERR);
-        send(client_fd, response, strlen(response), 0);
+        write(client_fd, response, strlen(response));
         return;
     }
     
@@ -210,19 +210,19 @@ void handle_close_event(int client_fd, char* buffer, ssize_t n) {
     
     if (auth_result == 0) {
         snprintf(response, sizeof(response), "%s %s\n", RSP_CLOSE, STATUS_NOK);
-        send(client_fd, response, strlen(response), 0);
+        write(client_fd, response, strlen(response));
         return;
     }
     
     if (auth_result == -1) {
         snprintf(response, sizeof(response), "%s %s\n", RSP_CLOSE, STATUS_WRP);
-        send(client_fd, response, strlen(response), 0);
+        write(client_fd, response, strlen(response));
         return;
     }
     
     if (!is_user_logged_in(uid)) {
         snprintf(response, sizeof(response), "%s %s\n", RSP_CLOSE, STATUS_NLG);
-        send(client_fd, response, strlen(response), 0);
+        write(client_fd, response, strlen(response));
         return;
     }
     
@@ -240,7 +240,7 @@ void handle_close_event(int client_fd, char* buffer, ssize_t n) {
     }
     
     snprintf(response, sizeof(response), "%s %s\n", RSP_CLOSE, status);
-    send(client_fd, response, strlen(response), 0);
+    write(client_fd, response, strlen(response));
     
     printf("[TCP] CLOSE: EID=%03d, UID=%s, status=%s\n", eid, uid, status);
 }
@@ -248,15 +248,18 @@ void handle_close_event(int client_fd, char* buffer, ssize_t n) {
 void handle_list_events(int client_fd, char* buffer, ssize_t bytes_read) {
     (void)bytes_read;
     
+    printf("[TCP] LIST: Received buffer: '%s' (%zd bytes)\n", buffer, bytes_read);
+    
     char cmd[4];
     char response[8192];  // Buffer grande para múltiplos eventos
     
     // Parse: "LST\n"
     int parsed = sscanf(buffer, "%3s", cmd);
+    printf("[TCP] LIST: Parsed command: '%s' (parsed=%d)\n", cmd, parsed);
     
     if (parsed != 1) {
         snprintf(response, sizeof(response), "%s %s\n", RSP_LIST, STATUS_ERR);
-        send(client_fd, response, strlen(response), 0);
+        write(client_fd, response, strlen(response));
         printf("[TCP] LIST: Invalid format\n");
         return;
     }
@@ -268,7 +271,7 @@ void handle_list_events(int client_fd, char* buffer, ssize_t bytes_read) {
     if (n < 0) {
         // Pasta não existe ou erro ao ler
         snprintf(response, sizeof(response), "%s %s\n", RSP_LIST, STATUS_NOK);
-        send(client_fd, response, strlen(response), 0);
+        write(client_fd, response, strlen(response));
         printf("[TCP] LIST: No events directory found\n");
         return;
     }
@@ -339,7 +342,7 @@ void handle_list_events(int client_fd, char* buffer, ssize_t bytes_read) {
     // Se não encontrou nenhum evento válido
     if (event_count == 0) {
         snprintf(response, sizeof(response), "%s %s\n", RSP_LIST, STATUS_NOK);
-        send(client_fd, response, strlen(response), 0);
+        write(client_fd, response, strlen(response));
         printf("[TCP] LIST: No valid events found\n");
         return;
     }
@@ -348,7 +351,7 @@ void handle_list_events(int client_fd, char* buffer, ssize_t bytes_read) {
     offset += snprintf(response + offset, sizeof(response) - offset, "\n");
     
     // Enviar resposta
-    send(client_fd, response, strlen(response), 0);
+    write(client_fd, response, strlen(response));
     
     printf("[TCP] LIST: Sent %d event(s)\n", event_count);
 }

@@ -794,6 +794,71 @@ void cmd_list() {
     }
 }
 
+void cmd_change_password(const char* old_pass, const char* new_pass) {  
+    // A implementar
+    char command[128];
+    char response[64];
+
+    //Validar formato das passwords
+    if (strlen(old_pass) != PASSWORD_LEN || strlen(new_pass) != PASSWORD_LEN) {
+        printf("Error: Passwords must be exactly %d alphanumeric characters\n", PASSWORD_LEN);
+        return;
+    }
+
+    int cmd_len = snprintf(command, sizeof(command),
+                           "%s %s %s %s\n",
+                           CMD_CHANGE_PASS, client_state.logged_uid,
+                           old_pass, new_pass);
+
+    int tcp_socket = tcp_connect_to_server();
+    if (tcp_socket == -1) {
+        return;
+    }
+
+    ssize_t sent = write(tcp_socket, command, cmd_len);
+    if (sent != cmd_len) {
+        perror("Error sending command");
+        close(tcp_socket);
+        return;
+    }
+
+    ssize_t resp_len = read(tcp_socket, response, sizeof(response) - 1);
+    close(tcp_socket);
+
+    if (resp_len <= 0) {
+        printf("Error: No response from server\n");
+        return;
+    }
+
+    response[resp_len] = '\0';
+    char rsp_code[4], status[4];
+    int parsed = sscanf(response, "%3s %3s", rsp_code, status);
+    if (parsed < 2) {
+        printf("Error: Invalid response format\n");
+        return;
+    }
+
+    if (strcmp(status, STATUS_OK) == 0) {
+        printf("Password changed successfully!\n");
+        strcpy(client_state.logged_password, new_pass);
+        
+    } else if (strcmp(status, STATUS_NLG) == 0) {
+        printf("Error: User not logged in\n");
+        
+    } else if (strcmp(status, STATUS_NOK) == 0) {
+        printf("Error: Wrong old password\n");
+
+    } else if (strcmp(status, STATUS_NID) == 0) {
+        printf("Error: User does not exist\n");
+        
+    } else if (strcmp(status, STATUS_ERR) == 0) {
+        printf("Error: Invalid command format\n");
+        
+    } else {
+        printf("Unknown response: %s\n", response);
+    }
+}
+
 
 CommandType parse_command_type(const char* command) {
 
@@ -804,6 +869,7 @@ CommandType parse_command_type(const char* command) {
     if (strcmp(command, "myevents") == 0 || strcmp(command, "mye") == 0) return CMD_TYPE_MYEVENTS;
     if (strcmp(command, "list") == 0) return CMD_TYPE_LIST;
     if (strcmp(command, "unregister") == 0) return CMD_TYPE_UNREGISTER;
+    if (strcmp(command, "changePass") == 0) return CMD_TYPE_CHANGE_PASSWORD;
     if (strcmp(command, "help") == 0) return CMD_TYPE_HELP;
     if (strcmp(command, "exit") == 0 || strcmp(command, "quit") == 0) return CMD_TYPE_EXIT;
     return CMD_TYPE_UNKNOWN;
@@ -877,6 +943,13 @@ int main(int argc, char *argv[]) {
                     cmd_unregister();
                 } else {
                     printf("Usage: unregister\n");
+                }
+                break;
+            case CMD_TYPE_CHANGE_PASSWORD:
+                if (parsed == 3) {
+                    cmd_change_password(arg1, arg2);
+                } else {
+                    printf("Usage: changePass old_password new_password\n");
                 }
                 break;
             case CMD_TYPE_CREATE:

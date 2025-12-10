@@ -298,9 +298,11 @@ void cmd_create(const char* name, const char* event_fname, const char* event_dat
     }
     
     // Abrir e ler ficheiro (deve existir na mesma pasta)
-    FILE *file = fopen(event_fname, "rb");
+    char dir[128];
+    snprintf(dir, sizeof(dir), "events/%s", event_fname);
+    FILE *file = fopen(dir, "rb");
     if (!file) {
-        printf("Error: Cannot open file '%s' (must exist in current folder)\n", event_fname);
+        printf("Error: Cannot open file '%s' (must exist in current folder)\n", dir);
         perror("Details");
         return;
     }

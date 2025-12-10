@@ -75,18 +75,18 @@ void handle_change_password(int client_fd, char* buffer, ssize_t n) {
 
 void handle_create_event(int client_fd, char* buffer, ssize_t n) {
     char cmd[4], uid[UID_LEN + 1], password[PASSWORD_LEN + 1];
-    char name[EVENT_NAME_LEN + 1], date[DATE_STR_LEN + 1];
+    char name[EVENT_NAME_LEN + 1], date[DATE_STR_LEN + 1], time[TIME_STR_LEN + 1];
     char filename[FILENAME_LEN + 1];
     int attendance;
     long filesize;
     char response[64];
     
     // Parse do comando (sem Fdata ainda):
-    // CRE UID password name date attendance Fname Fsize
-    int parsed = sscanf(buffer, "%3s %6s %8s %10s %10s %d %24s %ld",
-                       cmd, uid, password, name, date, &attendance, filename, &filesize);
+    // CRE UID password name date time attendance Fname Fsize
+    int parsed = sscanf(buffer, "%3s %6s %8s %10s %10s %5s %d %24s %ld",
+                       cmd, uid, password, name, date, time, &attendance, filename, &filesize);
     
-    if (parsed != 8) {
+    if (parsed != 9) {
         // Formato inválido
         snprintf(response, sizeof(response), "%s %s\n", RSP_CREATE, STATUS_ERR);
         write(client_fd, response, strlen(response));
@@ -156,8 +156,8 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
     char *filedata_ptr = buffer;
     int header_fields = 0;
     
-    // Avançar pelos primeiros 8 campos (CRE, UID, password, name, date, attendance, Fname, Fsize)
-    while (header_fields < 8 && filedata_ptr < buffer + n) {
+    // Avançar pelos primeiros 9 campos (CRE, UID, password, name, date, time, attendance, Fname, Fsize)
+    while (header_fields < 9 && filedata_ptr < buffer + n) {
         if (*filedata_ptr == ' ') {
             header_fields++;
         }
@@ -201,7 +201,7 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
     strncpy(ev.date, date, DATE_STR_LEN);
     ev.date[DATE_STR_LEN] = '\0';
     
-    strncpy(ev.time, "00:00", TIME_STR_LEN);
+    strncpy(ev.time, time, TIME_STR_LEN);
     ev.time[TIME_STR_LEN] = '\0';
     
     ev.total_seats = attendance;

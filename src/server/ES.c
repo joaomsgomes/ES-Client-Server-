@@ -189,7 +189,11 @@ int main(void) {
                                 
                                 // Identificar comando (primeiros 3 caracteres)
                                 if (bytes_read >= 3) {
-                                    if (strncmp(tcp_buffer, CMD_CREATE, 3) == 0) {
+
+                                    if (strncmp(tcp_buffer, CMD_CHANGE_PASS, 3) == 0) {
+                                        handle_change_password(client_fd, tcp_buffer, bytes_read);
+
+                                    } else if (strncmp(tcp_buffer, CMD_CREATE, 3) == 0) {
                                         handle_create_event(client_fd, tcp_buffer, bytes_read);
                                     }
                                     else if (strncmp(tcp_buffer, CMD_CLOSE, 3) == 0) {

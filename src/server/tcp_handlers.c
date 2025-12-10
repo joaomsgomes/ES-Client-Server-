@@ -10,7 +10,68 @@
 #include "../../include/utils.h"
 #include "../../include/file_system.h"
 
+void handle_change_password(int client_fd, char* buffer, ssize_t n) {
 
+    (void)n; // Unused parameter
+
+    char cmd[4], uid[UID_LEN + 1], old_password[PASSWORD_LEN + 1], new_password[PASSWORD_LEN + 1];
+    char response[64];
+
+    int parsed = sscanf(buffer, "%3s %6s %8s %8s", cmd, uid, old_password, new_password);
+
+    if (parsed != 4) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_CHANGE_PASS, STATUS_ERR);
+        write(client_fd, response, strlen(response));
+        printf("[TCP] CHANGE_PASS: Invalid format (parsed=%d)\n", parsed);
+        return;
+    }
+
+    if (!validate_uid(uid) || !validate_password(old_password) || !validate_password(new_password)) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_CHANGE_PASS, STATUS_ERR);
+        write(client_fd, response, strlen(response));
+        printf("[TCP] CHANGE_PASS: Invalid UID or password format (UID=%s)\n", uid);
+        return;
+    }
+
+    int auth_result = authenticate_user(uid, old_password);
+
+    if (auth_result == 0) {
+        // User não existe
+        snprintf(response, sizeof(response), "%s %s\n", RSP_CHANGE_PASS, STATUS_NID);
+        write(client_fd, response, strlen(response));
+        printf("[TCP] CHANGE_PASS: User not found (UID=%s)\n", uid);
+        return;
+    }
+
+    if (auth_result == -1) {
+        // Password incorreta
+        snprintf(response, sizeof(response), "%s %s\n", RSP_CHANGE_PASS, STATUS_NOK);
+        write(client_fd, response, strlen(response));
+        printf("[TCP] CHANGE_PASS: Wrong old password (UID=%s)\n", uid);
+        return;
+    }
+
+    if (!is_logged_in(uid)) {
+        // User não está logged in
+        snprintf(response, sizeof(response), "%s %s\n", RSP_CHANGE_PASS, STATUS_NLG);
+        write(client_fd, response, strlen(response));
+        printf("[TCP] CHANGE_PASS: User not logged in (UID=%s)\n", uid);
+        return;
+    }
+
+    if (change_password(uid, old_password, new_password)) {
+        // Sucesso
+        snprintf(response, sizeof(response), "%s %s\n", RSP_CHANGE_PASS, STATUS_OK);
+        write(client_fd, response, strlen(response));
+        printf("[TCP] CHANGE_PASS: Password changed successfully for user %s\n", uid);
+    } else {
+        // Falha ao alterar password
+        snprintf(response, sizeof(response), "%s %s\n", RSP_CHANGE_PASS, STATUS_NOK);
+        write(client_fd, response, strlen(response));
+        printf("[TCP] CHANGE_PASS: Failed to change password for user %s\n", uid);
+    }
+
+}
 
 void handle_create_event(int client_fd, char* buffer, ssize_t n) {
     char cmd[4], uid[UID_LEN + 1], password[PASSWORD_LEN + 1];

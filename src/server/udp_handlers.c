@@ -317,7 +317,7 @@ void handle_unregister(int sockfd, char* message, struct sockaddr_in* client_add
     if (logged_status == 1) {
         // User está logged in → OK (fazer logout + unregister)
         logout_user(uid);
-        unregister_user(uid, password);
+        unregister_user(uid);
         snprintf(response, sizeof(response), "%s %s\n", RSP_UNREGISTER, STATUS_OK);
         sendto(sockfd, response, strlen(response), 0,
                 (struct sockaddr*)client_addr, addrlen);

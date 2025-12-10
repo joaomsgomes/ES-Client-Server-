@@ -30,6 +30,7 @@ bool logout_user(const char* uid);
 bool is_user_logged_in(const char* uid);
 
 // ===== GESTÃO DE CONTAS =====
-bool unregister_user(const char* uid, const char* password);
+bool unregister_user(const char* uid);
+bool change_password(const char* uid, const char* old_password, const char* new_password);
 
 #endif // USER_MANAGEMENT_H

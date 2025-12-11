@@ -61,12 +61,13 @@ int create_event(Event *ev);
 int close_event(const char* uid, int eid);
 int get_event(int eid, Event *ev);
 int get_event_state(int eid);
-int is_date_in_past(const char *event_date);
+int get_event_seats(int eid, int *total_seats, int *reserved_seats);
 int is_event_owner(const char *uid, int eid);
 Event** list_all_events(int* count);
 Event** list_user_events(const char* uid, int* count);
 
 // Gestão de reservas
+int create_reservation(int eid, const char *uid, int num_seats);
 bool make_reservation(const char* uid, int eid, int num_people, int* available);
 Reservation** list_user_reservations(const char* uid, int* count);
 

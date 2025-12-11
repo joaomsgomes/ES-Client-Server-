@@ -10,11 +10,7 @@
 #include "../../include/utils.h"
 
 
-/**
- * Cria um novo evento
- * Formato START file: UID name desc_fname total_seats start_date start_time
- * Exemplo: 123456 Concert poster.jpg 500 31-12-2025 20:00
- */
+
 int create_event(Event *ev) {
     if (!ev) return -1;
     
@@ -200,62 +196,14 @@ int is_event_owner(const char *uid, int eid) {
     return (strcmp(ev.uid, uid) == 0) ? 1 : 0;
 }
 
-/**
- * Verifica se data (dd-mm-yyyy HH:MM) já passou
- * Retorna: 1 se passou, 0 se não passou, -1 em erro
- */
-int is_date_in_past(const char *event_date) {
-    if (!event_date) return -1;
-    
-    // O protocolo usa dd-mm-yyyy, mas o guia menciona dd-mm-yyyy HH:MM
-    // Vou assumir que event_date pode vir como "dd-mm-yyyy" sem hora
-    // e compararei apenas a data, assumindo 00:00 para o evento
-    
-    int day, month, year;
-    if (sscanf(event_date, "%d-%d-%d", &day, &month, &year) != 3) {
-        fprintf(stderr, "[EVENT] Invalid date format: %s\n", event_date);
-        return -1;
-    }
-    
-    // Criar timestamp do evento (às 00:00)
-    struct tm event_tm;
-    memset(&event_tm, 0, sizeof(struct tm));
-    event_tm.tm_mday = day;
-    event_tm.tm_mon = month - 1;
-    event_tm.tm_year = year - 1900;
-    event_tm.tm_hour = 0;
-    event_tm.tm_min = 0;
-    event_tm.tm_sec = 0;
-    
-    time_t event_time = mktime(&event_tm);
-    if (event_time == -1) {
-        fprintf(stderr, "[EVENT] mktime failed for date: %s\n", event_date);
-        return -1;
-    }
-    
-    // Obter tempo atual
-    time_t now = time(NULL);
-    
-    // Comparar apenas as datas (ignorar horas)
-    struct tm *now_tm = localtime(&now);
-    now_tm->tm_hour = 0;
-    now_tm->tm_min = 0;
-    now_tm->tm_sec = 0;
-    time_t now_date = mktime(now_tm);
-    
-    return (event_time < now_date) ? 1 : 0;
-}
+
 
 /**
  * Obtém o estado de um evento
  * Retorna: 0=passado, 1=ativo, 2=sold-out, 3=fechado, -1=erro
  */
 int get_event_state(int eid) {
-    Event ev;
-    
-    if (get_event(eid, &ev) != 0) {
-        return -1; // Evento não existe
-    }
+    if (!event_exists(eid)) return -1;
     
     // Verificar se tem ficheiro END (foi fechado manualmente)
     char end_filename[64];
@@ -265,13 +213,42 @@ int get_event_state(int eid) {
         return 3; // Fechado
     }
     
+    // Ler data do evento
+    char start_file[128];
+    snprintf(start_file, sizeof(start_file), "EVENTS/%03d/START_%03d.txt", eid, eid);
+    
+    FILE *fp = fopen(start_file, "r");
+    if (!fp) return -1;
+    
+    char uid[7], name[11], fname[25], date[11], event_time_str[6];
+    int total_seats;
+    
+    if (fscanf(fp, "%6s %10s %24s %d %10s %5s", uid, name, fname, &total_seats, date, event_time_str) != 6) {
+        fclose(fp);
+        return -1;
+    }
+    fclose(fp);
+    
+    // Adicionar hora à data para comparação: "dd-mm-yyyy HH:MM"
+    char full_date[32];
+    snprintf(full_date, sizeof(full_date), "%s %s", date, event_time_str);
+    
     // Verificar se data já passou
-    if (is_date_in_past(ev.date) == 1) {
+    time_t event_timestamp = date_to_timestamp(full_date);
+    time_t now_timestamp = time(NULL);
+    
+    if (event_timestamp < now_timestamp) {
         return 0; // Passado
     }
     
+    // Ler total de reservas
+    int total, reserved;
+    if (!get_event_seats(eid, &total, &reserved)) {
+        return -1;
+    }
+    
     // Verificar se está sold-out
-    if (ev.reserved_seats >= ev.total_seats) {
+    if (reserved >= total) {
         return 2; // Sold-out
     }
     
@@ -330,4 +307,97 @@ int close_event(const char *uid, int eid) {
     
     printf("[EVENT] Closed event EID=%03d by UID=%s at %s\n", eid, uid, timestamp);
     return 0; // OK
+}
+
+/**
+ * Lê total de lugares e lugares reservados de um evento
+ * Retorna: 1=sucesso, 0=erro
+ */
+int get_event_seats(int eid, int *total_seats, int *reserved_seats) {
+    // Ler total_seats de START_eid.txt
+    char start_file[128];
+    snprintf(start_file, sizeof(start_file), "EVENTS/%03d/START_%03d.txt", eid, eid);
+    
+    FILE *fp = fopen(start_file, "r");
+    if (!fp) return 0;
+    
+    char uid[7], name[11], fname[25], date[11], time[6];
+    
+    int fields = fscanf(fp, "%6s %10s %24s %d %10s %5s",
+                       uid, name, fname, total_seats, date, time);
+    fclose(fp);
+    
+    if (fields < 6) return 0;
+    
+    // Ler reserved_seats de RES_eid.txt
+    char res_file[128];
+    snprintf(res_file, sizeof(res_file), "EVENTS/%03d/RES_%03d.txt", eid, eid);
+    
+    fp = fopen(res_file, "r");
+    if (!fp) {
+        *reserved_seats = 0;  // Ficheiro não existe = 0 reservas
+        return 1;
+    }
+    
+    if (fscanf(fp, "%d", reserved_seats) != 1) {
+        fclose(fp);
+        return 0;
+    }
+    fclose(fp);
+    
+    return 1;
+}
+
+
+int create_reservation(int eid, const char *uid, int num_seats) {
+
+    time_t now = time(NULL);
+    struct tm *tm_info = localtime(&now);
+    char timestamp[32];
+    strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H%M%S", tm_info);
+    
+    char filename[128];
+    snprintf(filename, sizeof(filename), "R-%s-%s.txt", uid, timestamp);
+    
+    char content[128];
+    char display_timestamp[32];
+    strftime(display_timestamp, sizeof(display_timestamp), "%d-%m-%Y %H:%M:%S", tm_info);
+    snprintf(content, sizeof(content), "%s %d %s\n", uid, num_seats, display_timestamp);
+    
+    char event_path[256];
+    snprintf(event_path, sizeof(event_path), "EVENTS/%03d/RESERVATIONS/%s", eid, filename);
+    
+    FILE *fp = fopen(event_path, "w");
+    if (!fp) {printf(" !fp\n"); return 0;}
+    
+    fprintf(fp, "%s", content);
+    fclose(fp);
+    
+    char user_path[256];
+    snprintf(user_path, sizeof(user_path), "USERS/%s/RESERVED/%s", uid, filename);
+    
+    fp = fopen(user_path, "w");
+    if (fp) {
+        fprintf(fp, "%s", content);
+        fclose(fp);
+    }
+    
+    char res_file[128];
+    snprintf(res_file, sizeof(res_file), "EVENTS/%03d/RES_%03d.txt", eid, eid);
+    
+    int current_reserved = 0;
+    fp = fopen(res_file, "r");
+    if (fp) {
+        fscanf(fp, "%d", &current_reserved);
+        fclose(fp);
+    }
+    
+    fp = fopen(res_file, "w");
+    if (!fp) {printf("!fp\n"); return 0;}
+    
+    fprintf(fp, "%d\n", current_reserved + num_seats);
+    fclose(fp);
+    
+    printf("[DB] Created reservation: %s (EID=%03d, seats=%d)\n", filename, eid, num_seats);
+    return 1;
 }

@@ -1024,7 +1024,116 @@ void cmd_show(const char* eid_str) {
     free(response);
 }
 
+void cmd_reserve(const char* eid_str, int num_seats) {
+    
+    char command[128];
+    char response[64];
+    int available_seats;
 
+    if (!client_state.is_logged_in) {
+        printf("Error: User needs to be logged in to reserve seats\n");
+        return;
+    }
+
+    int eid = atoi(eid_str);
+    if (eid < 1 || eid > 999) {
+        printf("Error: Invalid EID (must be between 1 and 999)\n");
+        return;
+    }
+
+    if (num_seats < 1 || num_seats > 999) {
+        printf("Error: Number of seats must be between 1 and 999\n");
+        return;
+    }
+
+    int msg_len = snprintf(command, sizeof(command), "%s %s %s %s %d\n",
+                           CMD_RESERVE, client_state.logged_uid, client_state.logged_password, eid_str, num_seats);
+
+    if (msg_len < 0 || msg_len >= (int)sizeof(command)) {
+        printf("Error: Command too long\n");
+        return;
+    }
+    
+    int tcp_socket = tcp_connect_to_server();
+    if (tcp_socket == -1) {
+        return;
+    }
+
+    ssize_t sent = write(tcp_socket, command, msg_len);
+    if (sent != msg_len) {
+        perror("Error sending command");
+        close(tcp_socket);
+        return;
+    }
+
+    ssize_t resp_len = read(tcp_socket, response, sizeof(response) - 1);
+    close(tcp_socket);
+    
+    if (resp_len <= 0) {
+        printf("Error: No response from server\n");
+        return;
+    }
+    
+    response[resp_len] = '\0';
+
+    printf("Message from ES: %s\n", response);
+
+    char rsp_code[4], status[4];
+    int parsed = sscanf(response, "%3s %3s", rsp_code, status);
+
+    if (parsed < 2 || strcmp(rsp_code, RSP_RESERVE) != 0) {
+        printf("Error: Invalid response format\n");
+        return;
+    }
+
+    if (strcmp(status, STATUS_ACC) == 0) {
+        
+        printf("Reservation successful!\n");
+
+        if (num_seats == 1)  {            
+            printf("  %d seat reserved for event %s\n", num_seats, eid_str);
+        } else {
+            printf("  %d seat(s) reserved for event %s\n", num_seats, eid_str);
+        }
+        
+    } else if (strcmp(status, STATUS_REJ) == 0) {
+        
+        if (sscanf(response, "%3s %3s %d", rsp_code, status, &available_seats) == 3) {
+            printf("Reservation rejected: not enough seats available\n");
+            printf("  Requested: %d seats\n", num_seats);
+            printf("  Available: %d seats\n", available_seats);
+        
+        } else {
+            printf("Error: Reservation rejected (could not parse available seats)\n");
+        }
+        
+    } else if (strcmp(status, STATUS_NLG) == 0) {
+        printf("Error: User not logged in\n");
+        
+    } else if (strcmp(status, STATUS_NOK) == 0) {
+        printf("Error: Event %s is not active\n", eid_str);
+
+    } else if (strcmp(status, STATUS_CLS) == 0) {
+        printf("Error: Event %s is closed\n", eid_str);
+        
+    } else if (strcmp(status, STATUS_SLD) == 0) {
+        printf("Error: Event %s is sold out\n", eid_str);
+    
+    } else if (strcmp(status, STATUS_PST) == 0) {
+        printf("Error: Event date has already passed\n");
+    
+    } else if (strcmp(status, STATUS_WRP) == 0) {
+        printf("Error: Wrong password\n");
+    
+    } else if (strcmp(status, STATUS_ERR) == 0) {
+        printf("Error: Invalid command format\n");
+
+    } else {
+        printf("Unknown response: %s\n", response);
+    }
+
+
+}
 
 
 CommandType parse_command_type(const char* command) {
@@ -1035,6 +1144,7 @@ CommandType parse_command_type(const char* command) {
     if (strcmp(command, "close") == 0) return CMD_TYPE_CLOSE;
     if (strcmp(command, "myevents") == 0 || strcmp(command, "mye") == 0) return CMD_TYPE_MYEVENTS;
     if (strcmp(command, "list") == 0) return CMD_TYPE_LIST;
+    if (strcmp(command, "reserve") == 0) return CMD_TYPE_RESERVE;
     if (strcmp(command, "unregister") == 0) return CMD_TYPE_UNREGISTER;
     if (strcmp(command, "changePass") == 0) return CMD_TYPE_CHANGE_PASSWORD;
     if (strcmp(command, "show") ==0) return CMD_TYPE_SHOW;
@@ -1156,6 +1266,11 @@ int main(int argc, char *argv[]) {
                     cmd_show(arg1);
                 } else {
                     printf("Usage: show EID\n");
+                }
+                break;
+            case CMD_TYPE_RESERVE:
+                if (parsed == 3) {
+                    cmd_reserve(arg1, atoi(arg2));
                 }
                 break;
             case CMD_TYPE_HELP:

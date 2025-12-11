@@ -278,12 +278,6 @@ void handle_close_event(int client_fd, char* buffer, ssize_t n) {
         return;
     }
     
-    if (auth_result == -1) {
-        snprintf(response, sizeof(response), "%s %s\n", RSP_CLOSE, STATUS_WRP);
-        write(client_fd, response, strlen(response));
-        return;
-    }
-    
     if (!is_user_logged_in(uid)) {
         snprintf(response, sizeof(response), "%s %s\n", RSP_CLOSE, STATUS_NLG);
         write(client_fd, response, strlen(response));
@@ -308,6 +302,8 @@ void handle_close_event(int client_fd, char* buffer, ssize_t n) {
     
     printf("[TCP] CLOSE: EID=%03d, UID=%s, status=%s\n", eid, uid, status);
 }
+
+// DELETE DEBUG PRINTS AFTER IMPLEMENTING RESERVE !!
 
 void handle_list_events(int client_fd, char* buffer, ssize_t bytes_read) {
     (void)bytes_read;
@@ -418,6 +414,141 @@ void handle_list_events(int client_fd, char* buffer, ssize_t bytes_read) {
     write(client_fd, response, strlen(response));
     
     printf("[TCP] LIST: Sent %d event(s)\n", event_count);
+}
+
+void handle_reserve_seats(int client_fd, char* buffer, ssize_t bytes_read) {
+
+
+    (void)bytes_read;
+    
+    char cmd[4], uid[UID_LEN + 1], password[PASSWORD_LEN + 1], eid_str[4];
+    int people, eid;
+    char response[64];
+
+    
+    int parsed = sscanf(buffer, "%3s %6s %8s %3s %d", 
+                       cmd, uid, password, eid_str, &people);
+    eid = atoi(eid_str);
+
+    if (parsed != 5) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_RESERVE, STATUS_ERR);
+        write(client_fd, response, strlen(response));
+        printf("[TCP] RESERVE: Invalid format (parsed=%d)\n", parsed);
+        return;
+    }
+
+    if (!validate_uid(uid) || !validate_password(password)) {
+        printf("Validate_uid and validate_password failed\n");
+        snprintf(response, sizeof(response), "%s %s\n", RSP_RESERVE, STATUS_ERR);
+        write(client_fd, response, strlen(response));
+        return;
+    }
+
+    if (eid < 1 || eid > 999 || people < 1 || people > 999) {
+        printf("[TCP] RESERVE: Invalid EID (%d) or number of people (%d)\n", eid, people);
+        snprintf(response, sizeof(response), "%s %s\n", RSP_RESERVE, STATUS_ERR);
+        write(client_fd, response, strlen(response));
+        return;
+    }
+
+    
+    if (!user_exists(uid)) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_RESERVE, STATUS_NLG);
+        write(client_fd, response, strlen(response));
+        printf("[TCP] RESERVE: User not found (UID=%s)\n", uid);
+        return;
+    }
+
+   
+    int auth_result = authenticate_user(uid, password);
+    if (auth_result != 1) {
+        snprintf(response, sizeof(response), "%s %s\n", 
+                RSP_RESERVE, auth_result == 0 ? STATUS_NLG : STATUS_WRP);
+        write(client_fd, response, strlen(response));
+        printf("[TCP] RESERVE: Authentication failed (UID=%s)\n", uid);
+        return;
+    }
+
+    
+    if (!is_logged_in(uid)) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_RESERVE, STATUS_NLG);
+        write(client_fd, response, strlen(response));
+        printf("[TCP] RESERVE: User not logged in (UID=%s)\n", uid);
+        return;
+    }
+
+    
+    if (!event_exists(eid)) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_RESERVE, STATUS_NOK);
+        write(client_fd, response, strlen(response));
+        printf("[TCP] RESERVE: Event does not exist (EID=%03d)\n", eid);
+        return;
+    }
+
+    int event_state = get_event_state(eid);
+    
+    if (event_state == 0) {  // Past
+        snprintf(response, sizeof(response), "%s %s\n", RSP_RESERVE, STATUS_PST);
+        write(client_fd, response, strlen(response));
+        printf("[TCP] RESERVE: Event date has passed (EID=%03d)\n", eid);
+        return;
+    }
+
+    if (event_state == 3) {  // Closed
+        snprintf(response, sizeof(response), "%s %s\n", RSP_RESERVE, STATUS_CLS);
+        write(client_fd, response, strlen(response));
+        printf("[TCP] RESERVE: Event closed (EID=%03d)\n", eid);
+        return;
+    }
+
+    if (event_state == 2) {  // Sold out
+        snprintf(response, sizeof(response), "%s %s\n", RSP_RESERVE, STATUS_SLD);
+        write(client_fd, response, strlen(response));
+        printf("[TCP] RESERVE: Event sold out (EID=%03d)\n", eid);
+        return;
+    }
+
+    if (event_state != 1) {  // Not active (should not happen) REVIEW !
+        snprintf(response, sizeof(response), "%s %s\n", RSP_RESERVE, STATUS_NOK);
+        write(client_fd, response, strlen(response));
+        printf("[TCP] RESERVE: Event not active (EID=%03d, state=%d)\n", eid, event_state);
+        return;
+    }
+
+    // EVENTO ESTÁ ACTIVE (state=1)
+    
+    // Obter total de lugares e lugares já reservados
+    int total_seats, reserved_seats;
+    if (!get_event_seats(eid, &total_seats, &reserved_seats)) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_RESERVE, STATUS_ERR);
+        write(client_fd, response, strlen(response));
+        printf("[TCP] RESERVE: Failed to read event seats (EID=%03d)\n", eid);
+        return;
+    }
+
+    int available_seats = total_seats - reserved_seats;
+
+    if (people > available_seats) {
+        // REJEITAR - enviar número de lugares disponíveis
+        snprintf(response, sizeof(response), "%s %s %d\n", 
+                RSP_RESERVE, STATUS_REJ, available_seats);
+        write(client_fd, response, strlen(response));
+        printf("[TCP] RESERVE: Not enough seats (EID=%03d, requested=%d, available=%d)\n", 
+               eid, people, available_seats);
+        return;
+    }
+
+    // ACEITAR RESERVA - criar ficheiros de reserva
+    if (!create_reservation(eid, uid, people)) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_RESERVE, STATUS_ERR);
+        write(client_fd, response, strlen(response));
+        printf("[TCP] RESERVE: Failed to create reservation (EID=%03d, UID=%s)\n", eid, uid);
+        return;
+    }
+
+    snprintf(response, sizeof(response), "%s %s\n", RSP_RESERVE, STATUS_ACC);
+    write(client_fd, response, strlen(response));
+    printf("[TCP] RESERVE: Success (EID=%03d, UID=%s, seats=%d)\n", eid, uid, people);
 }
 
 

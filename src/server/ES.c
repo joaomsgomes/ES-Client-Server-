@@ -101,7 +101,7 @@ int main(void) {
 
     while(1)
     {
-        testfds = inputs; // Reload mask
+        testfds = inputs;
     //        printf("testfds byte: %d\n",((char *)&testfds)[0]); // Debug
         memset((void *)&timeout,0,sizeof(timeout));
         timeout.tv_sec=10;
@@ -141,7 +141,7 @@ int main(void) {
                         if(errcode==0)
                             printf("       From [%s:%s]\n",host,service);
                         
-                        // Route UDP commands
+                       
                         if(strncmp(prt_str, CMD_LOGIN, 3) == 0) {
                             handle_login(ufd, prt_str, &_useraddr, addrlen);
                         }
@@ -151,7 +151,6 @@ int main(void) {
                         else if(strncmp(prt_str, CMD_UNREGISTER, 3) == 0) {
                             handle_unregister(ufd, prt_str, &_useraddr, addrlen);
                         }
-                        // TODO: other UDP commands (my_reservations)
                         else if(strncmp(prt_str, CMD_MYEVENTS, 3) == 0) {
                             handle_my_events(ufd, prt_str, &_useraddr, addrlen);
                         }
@@ -204,6 +203,9 @@ int main(void) {
                                     }
                                     else if (strncmp(tcp_buffer, CMD_SHOW, 3) == 0) {
                                         handle_show_event(client_fd, tcp_buffer, bytes_read);
+                                    }
+                                    else if(strncmp(tcp_buffer, CMD_RESERVE, 3) == 0) {
+                                        handle_reserve_seats(client_fd, tcp_buffer, bytes_read);
                                     }
                                     else {
                                         printf("[TCP] Unknown command\n");

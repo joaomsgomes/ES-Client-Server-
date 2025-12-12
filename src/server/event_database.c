@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "../../include/es_server.h"
+#include "../../include/event_database.h"
 #include "../../include/file_system.h"
 #include "../../include/utils.h"
 

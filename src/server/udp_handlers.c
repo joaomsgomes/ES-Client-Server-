@@ -8,6 +8,7 @@
 #include "../../include/es_server.h"
 #include "../../include/protocol.h"
 #include "../../include/user_management.h"
+#include "../../include/event_database.h"
 #include "../../include/utils.h"
 
 /**

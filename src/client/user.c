@@ -9,6 +9,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include "../include/protocol.h"
+#include "../include/user_client.h"
 #include "../include/utils.h"
 
 #define INPUT_BUFFER_SIZE 256
@@ -1152,7 +1153,7 @@ void cmd_reserve(const char* eid_str, int num_seats) {
 }
 
 void cmd_my_reservations() {
-    // A implementar
+    
     char message[64];
     char response[1024];
 

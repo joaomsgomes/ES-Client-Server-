@@ -5,8 +5,6 @@
 #include <stdbool.h>
 
 
-
-
 #define MYPORT "58000"
 
 #define MAX_USERS 1000
@@ -20,8 +18,6 @@
 #define ARRAY_SIZE 128
 #define DATE_STR_LEN 10 // dd-mm-yyyy
 #define TIME_STR_LEN 5  // HH:MM
-
-// Estruturas de dados
 
 typedef struct {
     char uid[UID_LEN + 1];
@@ -49,26 +45,5 @@ typedef struct {
     int num_seats;
 } Reservation;
 
-// Funções principais do servidor
-void init_server(int port, bool verbose);
-void* udp_server_thread(void* arg);
-void* tcp_server_thread(void* arg);
-
-
-// Gestão de eventos
-void init_event_system();
-int create_event(Event *ev);
-int close_event(const char* uid, int eid);
-int get_event(int eid, Event *ev);
-int get_event_state(int eid);
-int get_event_seats(int eid, int *total_seats, int *reserved_seats);
-int is_event_owner(const char *uid, int eid);
-Event** list_all_events(int* count);
-Event** list_user_events(const char* uid, int* count);
-
-// Gestão de reservas
-int create_reservation(int eid, const char *uid, int num_seats);
-bool make_reservation(const char* uid, int eid, int num_people, int* available);
-Reservation** list_user_reservations(const char* uid, int* count);
 
 #endif

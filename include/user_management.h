@@ -10,9 +10,6 @@
  * Implementado em: user_database.c
  */
 
-// ===== INICIALIZAÇÃO =====
-void init_user_system();
-void cleanup_user_system();
 
 // ===== AUTENTICAÇÃO =====
 bool register_user(const char* uid, const char* password);

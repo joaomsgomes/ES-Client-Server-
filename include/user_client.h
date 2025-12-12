@@ -2,6 +2,7 @@
 #define USER_CLIENT_H
 
 #include <stdbool.h>
+#include <stddef.h>
 
 /**
  * User Client Module
@@ -15,8 +16,10 @@
  *   Terminal 2: ./user -n 127.0.0.1 -p 58000
  */
 
-// ===== INICIALIZAÇÃO =====
+// ===== INICIALIZAÇÃO E CONEXÃO =====
 bool init_udp_connection(const char* server_ip, const char* server_port);
+int tcp_connect_to_server(void);
+bool send_udp_receive_response(const char* message, char* response, size_t response_size);
 
 // ===== COMANDOS UDP =====
 void cmd_login(const char* uid, const char* password);

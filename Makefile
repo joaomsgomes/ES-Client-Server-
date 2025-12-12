@@ -14,12 +14,10 @@ SERVER_SRCS = $(SRC_DIR)/server/ES.c \
               $(SRC_DIR)/server/event_database.c \
               $(SRC_DIR)/server/tcp_handlers.c \
               $(SRC_DIR)/server/udp_handlers.c \
-              $(SRC_DIR)/common/protocol.c \
               $(SRC_DIR)/common/utils.c \
               $(SRC_DIR)/common/file_transfer.c
 
 CLIENT_SRCS = $(SRC_DIR)/client/user.c \
-              $(SRC_DIR)/common/protocol.c \
               $(SRC_DIR)/common/utils.c
 
 # Ficheiros objeto

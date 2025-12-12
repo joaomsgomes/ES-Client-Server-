@@ -75,15 +75,4 @@ typedef enum {
     CMD_TYPE_EXIT
 } CommandType;
 
-
-// Funções de protocolo
-int send_udp_message(int sockfd, const char* message, 
-                     struct sockaddr_in* addr, socklen_t addrlen);
-int receive_udp_message(int sockfd, char* buffer, size_t size,
-                        struct sockaddr_in* addr, socklen_t* addrlen);
-int send_tcp_message(int sockfd, const char* message);
-int receive_tcp_message(int sockfd, char* buffer, size_t size);
-int send_file_tcp(int sockfd, const char* filename, long filesize);
-int receive_file_tcp(int sockfd, const char* filename, long filesize);
-
 #endif

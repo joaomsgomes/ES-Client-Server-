@@ -45,9 +45,5 @@ void handle_reserve_seats(int client_fd, char* buffer, ssize_t n);
  */
 void handle_change_password(int client_fd, char* buffer, ssize_t n);
 
-/**
- * Processa comando TCP recebido e chama o handler apropriado
- */
-void process_tcp_command(int client_fd, char* buffer, ssize_t n);
 
 #endif

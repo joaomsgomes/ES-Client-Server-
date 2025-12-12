@@ -354,31 +354,40 @@ int create_reservation(int eid, const char *uid, int num_seats) {
     time_t now = time(NULL);
     struct tm *tm_info = localtime(&now);
     char timestamp[32];
-    strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H%M%S", tm_info);
+    strftime(timestamp, sizeof(timestamp), "%Y-%m-%d_%H%M%S", tm_info);
     
-    char filename[128];
-    snprintf(filename, sizeof(filename), "R-%s-%s.txt", uid, timestamp);
+    char user_filename[128];
+    snprintf(user_filename, sizeof(user_filename), "R-%s-%s.txt", uid, timestamp);
+
+    char event_filename[128];
+    snprintf(event_filename, sizeof(event_filename), "R-%03d-%s.txt", eid, timestamp);
     
-    char content[128];
     char display_timestamp[32];
     strftime(display_timestamp, sizeof(display_timestamp), "%d-%m-%Y %H:%M:%S", tm_info);
-    snprintf(content, sizeof(content), "%s %d %s\n", uid, num_seats, display_timestamp);
+    
+    // Formato: UID num_seats timestamp (para EVENTS)
+    char event_content[128];
+    snprintf(event_content, sizeof(event_content), "%s %d %s\n", uid, num_seats, display_timestamp);
+    
+    // Formato: EID num_seats timestamp (para USERS - inclui EID)
+    char user_content[128];
+    snprintf(user_content, sizeof(user_content), "%d %d %s\n", eid, num_seats, display_timestamp);
     
     char event_path[256];
-    snprintf(event_path, sizeof(event_path), "EVENTS/%03d/RESERVATIONS/%s", eid, filename);
+    snprintf(event_path, sizeof(event_path), "EVENTS/%03d/RESERVATIONS/%s", eid, user_filename);
     
     FILE *fp = fopen(event_path, "w");
     if (!fp) {printf(" !fp\n"); return 0;}
     
-    fprintf(fp, "%s", content);
+    fprintf(fp, "%s", event_content);
     fclose(fp);
     
     char user_path[256];
-    snprintf(user_path, sizeof(user_path), "USERS/%s/RESERVED/%s", uid, filename);
+    snprintf(user_path, sizeof(user_path), "USERS/%s/RESERVED/%s", uid, event_filename);
     
     fp = fopen(user_path, "w");
     if (fp) {
-        fprintf(fp, "%s", content);
+        fprintf(fp, "%s", user_content);
         fclose(fp);
     }
     
@@ -398,6 +407,6 @@ int create_reservation(int eid, const char *uid, int num_seats) {
     fprintf(fp, "%d\n", current_reserved + num_seats);
     fclose(fp);
     
-    printf("[DB] Created reservation: %s (EID=%03d, seats=%d)\n", filename, eid, num_seats);
+    printf("[DB] Created reservation:  ( UID = %s, EID=%03d, seats=%d)\n", uid, eid, num_seats);
     return 1;
 }

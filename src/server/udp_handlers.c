@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <netinet/in.h>
 #include <dirent.h>
 #include "../../include/es_server.h"
@@ -329,4 +330,133 @@ void handle_unregister(int sockfd, char* message, struct sockaddr_in* client_add
                 (struct sockaddr*)client_addr, addrlen);
         printf("[UDP] UNREGISTER: User %s is not logged in\n", uid);
     }
+}
+
+void handle_my_reservations(int sockfd, char* message, struct sockaddr_in* client_addr, socklen_t addrlen) {
+    // A implementar
+
+    char cmd[4], uid[UID_LEN + 1], password[PASSWORD_LEN + 1];
+    char response[2048];  // Buffer grande para lista de reservas
+
+    // Parse: "LMR UID password\n"
+    int parsed = sscanf(message, "%3s %6s %8s", cmd, uid, password);
+
+    if (parsed != 3) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_MY_RESERVATIONS, STATUS_ERR);
+        sendto(sockfd, response, strlen(response), 0,
+               (struct sockaddr*)client_addr, addrlen);
+        printf("[UDP] MY_RESERVATIONS: Invalid format\n");
+        return;
+    }
+
+    // Validar formato
+    if (!validate_uid(uid) || !validate_password(password)) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_MY_RESERVATIONS, STATUS_ERR);
+        sendto(sockfd, response, strlen(response), 0,
+               (struct sockaddr*)client_addr, addrlen);
+        printf("[UDP] MY_RESERVATIONS: Invalid UID or password format (UID=%s)\n", uid);
+        return;
+    }
+
+    // Autenticar utilizador
+    int auth_result = authenticate_user(uid, password);
+
+    if (auth_result == 0) {
+        // Utilizador não existe
+        snprintf(response, sizeof(response), "%s %s\n", RSP_MY_RESERVATIONS, STATUS_NOK);
+        sendto(sockfd, response, strlen(response), 0,
+               (struct sockaddr*)client_addr, addrlen);
+        printf("[UDP] MY_RESERVATIONS: User %s not registered\n", uid);
+        return;
+    }
+
+    if (auth_result == -1) {
+        // Password incorreta
+        snprintf(response, sizeof(response), "%s %s\n", RSP_MY_RESERVATIONS, STATUS_WRP);
+        sendto(sockfd, response, strlen(response), 0,
+               (struct sockaddr*)client_addr, addrlen);
+        printf("[UDP] MY_RESERVATIONS: Wrong password for user %s\n", uid);
+        return;
+    }
+
+    // Verificar se está logado
+    if (!is_user_logged_in(uid)) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_MY_RESERVATIONS, STATUS_NLG);
+        sendto(sockfd, response, strlen(response), 0,
+               (struct sockaddr*)client_addr, addrlen);
+        printf("[UDP] MY_RESERVATIONS: User %s not logged in\n", uid);
+        return;
+    }
+
+    char created_path[256];
+    snprintf(created_path, sizeof(created_path), "USERS/%s/RESERVED", uid);
+
+    struct dirent **entries;
+    int n = scandir(created_path, &entries, NULL, alphasort);
+
+    if (n < 0) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_MY_RESERVATIONS, STATUS_NOK);
+        sendto(sockfd, response, strlen(response), 0,
+               (struct sockaddr*)client_addr, addrlen);
+        printf("[UDP] MY_RESERVATIONS: User %s has no reservations\n", uid);
+        return;
+    }
+
+    int offset = snprintf(response, sizeof(response), "%s %s", RSP_MY_RESERVATIONS, STATUS_OK);
+    int reservation_count = 0;
+
+    for (int i = 0; i < n; i++) {
+        if (strcmp(entries[i]->d_name, ".") == 0 ||
+            strcmp(entries[i]->d_name, "..") == 0) {
+            free(entries[i]);
+            continue;
+        }
+
+        // Abrir ficheiro de reserva
+        char file_path[512];
+        snprintf(file_path, sizeof(file_path), "%s/%s", created_path, entries[i]->d_name);
+        
+        FILE *fp = fopen(file_path, "r");
+        if (!fp) {
+            free(entries[i]);
+            continue;
+        }
+        
+        // Ler conteúdo: "EID num_seats dd-mm-yyyy HH:MM:SS"
+        int file_eid, num_seats;
+        char date[DATE_STR_LEN + 1];
+        char time[TIME_STR_LEN + 4];  // Para ler "HH:MM:SS" (8 chars)
+        
+        if (fscanf(fp, "%d %d %10s %15s", &file_eid, &num_seats, date, time) != 4) {
+            fclose(fp);
+            free(entries[i]);
+            continue;
+        }
+        fclose(fp);
+        // Adicionar à resposta: " EID num_seats date time"
+        offset += snprintf(response + offset, sizeof(response) - offset,
+                        " %d %d %s %s", file_eid, num_seats, date, time);
+        reservation_count++;
+
+        free(entries[i]);
+    }
+    free(entries);
+
+    if (reservation_count == 0) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_MY_RESERVATIONS, STATUS_NOK);
+        sendto(sockfd, response, strlen(response), 0,
+               (struct sockaddr*)client_addr, addrlen);
+        printf("[UDP] MY_RESERVATIONS: User %s has no valid reservations\n", uid);
+        return;
+    }
+
+    offset += snprintf(response + offset, sizeof(response) - offset, "\n");
+
+    sendto(sockfd, response, strlen(response), 0,
+           (struct sockaddr*)client_addr, addrlen);
+        
+    printf("[UDP] MY_RESERVATIONS: Sent %d reservation(s) to user %s\n", reservation_count, uid);
+    
+
+
 }

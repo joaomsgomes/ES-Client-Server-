@@ -15,6 +15,7 @@
 #define PASSWORD_LEN 8
 #define UID_LEN 6
 #define DATE_STR_LEN 10
+#define TIME_STR_LEN 5
 #define EVENT_NAME_LEN 10
 
 // Estado global do cliente
@@ -267,7 +268,7 @@ void cmd_unregister() {
 }
 
 
-void cmd_create(const char* name, const char* event_fname, const char* event_date, const char* event_time, int num_attendees) {
+void cmd_create_event(const char* name, const char* event_fname, const char* event_date, const char* event_time, int num_attendees) {
     // Verificar se está logado
     if (!client_state.is_logged_in) {
         printf("Error: You must be logged in to create events\n");
@@ -452,7 +453,7 @@ void cmd_create(const char* name, const char* event_fname, const char* event_dat
  * Comando: close EID
  * Fecha um evento criado pelo utilizador logado
  */
-void cmd_close(const char* eid_str) {
+void cmd_close_event(const char* eid_str) {
     // Verificar se está logado
     if (!client_state.is_logged_in) {
         printf("Error: You must be logged in to close events\n");
@@ -544,10 +545,10 @@ void cmd_close(const char* eid_str) {
     }
 }
 
-void cmd_mye() {
+void cmd_my_events() {
     
     char message[64];
-    char response[64];
+    char response[1024];
 
     // Validar que utilizador está autenticado
     if (!client_state.is_logged_in) {
@@ -643,7 +644,7 @@ void cmd_mye() {
 
 }
 
-void cmd_list() {
+void cmd_list_events() {
 
     if (!client_state.is_logged_in) {
         printf("Error: User needs to be logged in to view all available events\n");
@@ -848,7 +849,7 @@ void cmd_change_password(const char* old_pass, const char* new_pass) {
     }
 }
 
-void cmd_show(const char* eid_str) {
+void cmd_show_event(const char* eid_str) {
 
     if (!client_state.is_logged_in) {
         printf("Error: User needs to be logged in to view event details\n");
@@ -950,12 +951,27 @@ void cmd_show(const char* eid_str) {
             return;
         }
         
-        // Encontrar onde começa o Fdata (depois de 9 espaços)
-        int spaces = 0;
-        char *fdata_ptr = response;
+        // Encontrar onde começa o Fdata
+        // O sscanf lê até ao último número (fsize), mas não consome o espaço seguinte
+        // Precisamos saltar: "RSE OK " + os 8 campos + espaços entre eles
+        char *fdata_ptr = ptr;  // ptr já aponta depois de "RSE OK "
         
-        while (spaces < 9 && fdata_ptr < response + total_received) {
-            if (*fdata_ptr == ' ') spaces++;
+        // Saltar os 8 campos que já lemos
+        int fields_to_skip = 8;
+        while (fields_to_skip > 0 && fdata_ptr < response + total_received) {
+            // Saltar espaços
+            while (*fdata_ptr == ' ' && fdata_ptr < response + total_received) {
+                fdata_ptr++;
+            }
+            // Saltar o campo
+            while (*fdata_ptr != ' ' && fdata_ptr < response + total_received) {
+                fdata_ptr++;
+            }
+            fields_to_skip--;
+        }
+        
+        // Agora saltar o último espaço antes do Fdata
+        while (*fdata_ptr == ' ' && fdata_ptr < response + total_received) {
             fdata_ptr++;
         }
         
@@ -1135,6 +1151,89 @@ void cmd_reserve(const char* eid_str, int num_seats) {
 
 }
 
+void cmd_my_reservations() {
+    // A implementar
+    char message[64];
+    char response[1024];
+
+    // Validar que utilizador está autenticado
+    if (!client_state.is_logged_in) {
+        printf("Error: User needs to be logged in to view their reservations\n");
+        return;
+    }
+
+    // Construir mensagem: "LMR UID password\n"
+    snprintf(message, sizeof(message), "%s %s %s\n", CMD_MY_RESERVATIONS, client_state.logged_uid, client_state.logged_password);
+
+    if (!send_udp_receive_response(message, response, sizeof(response))) {
+        printf("Error: Communication with server failed\n");
+        return;
+    }
+
+    // Parse resposta: "RMR status [EID date value]* \n"
+    char rsp_code[4], status[4];
+    if (sscanf(response, "%3s %3s", rsp_code, status) != 2) {
+        printf("Error: Invalid response format\n");
+        return;
+    }
+
+    // Processar status
+    if (strcmp(status, STATUS_OK) == 0) {
+
+        // Parse da lista de reservas
+        char *ptr = response + 7;  // Saltar "RMR OK "
+        int reservation_count = 0;
+
+        printf("\n═══════════════════════════════════════════════════════\n");
+        printf("  Your Reservations\n");
+        printf("═══════════════════════════════════════════════════════\n");
+        printf("  EID      Date       Time       Number of Seats\n");
+        printf("───────────────────────────────────────────────────────\n");
+
+        int eid;
+        char date[DATE_STR_LEN + 1];
+        char time[TIME_STR_LEN + 4]; // espaço para formato HH:MM:SS
+        int num_seats;
+
+        while (sscanf(ptr, "%d %d %10s %8s", &eid, &num_seats, date, time) == 4) {
+            reservation_count++;
+
+            printf("  %03d    %s   %s       %d \n", eid, date, time, num_seats);
+            
+            // Avançar para próximo conjunto EID date time value
+            int spaces_count = 0;
+            while (spaces_count < 4 && *ptr) {
+                if (*ptr == ' ' || *ptr == '\n') {
+                    spaces_count++;
+                }
+                ptr++;
+            }
+            
+            
+        }
+
+        printf("───────────────────────────────────────────────────────\n");
+        printf("  Total: %d reservation(s)\n", reservation_count);
+        printf("═══════════════════════════════════════════════════════\n\n");
+
+    } else if (strcmp(status, STATUS_NOK) == 0) {
+        printf("You have no reservations yet\n");
+
+    } else if (strcmp(status, STATUS_NLG) == 0) {
+        printf("Error: User not logged in\n");
+
+    } else if (strcmp(status, STATUS_WRP) == 0) {
+        printf("Error: Wrong password\n");
+
+    } else if (strcmp(status, STATUS_ERR) == 0) {
+        printf("Error: Invalid request format\n");
+
+    } else {
+        printf("Unknown response: %s\n", response);
+    }
+
+}
+
 
 CommandType parse_command_type(const char* command) {
 
@@ -1142,12 +1241,13 @@ CommandType parse_command_type(const char* command) {
     if (strcmp(command, "create") == 0) return CMD_TYPE_CREATE;
     if (strcmp(command, "logout") == 0) return CMD_TYPE_LOGOUT;
     if (strcmp(command, "close") == 0) return CMD_TYPE_CLOSE;
-    if (strcmp(command, "myevents") == 0 || strcmp(command, "mye") == 0) return CMD_TYPE_MYEVENTS;
+    if (strcmp(command, "myevents") == 0 || strcmp(command, "mye") == 0) return CMD_TYPE_MY_EVENTS;
     if (strcmp(command, "list") == 0) return CMD_TYPE_LIST;
     if (strcmp(command, "reserve") == 0) return CMD_TYPE_RESERVE;
     if (strcmp(command, "unregister") == 0) return CMD_TYPE_UNREGISTER;
     if (strcmp(command, "changePass") == 0) return CMD_TYPE_CHANGE_PASSWORD;
     if (strcmp(command, "show") ==0) return CMD_TYPE_SHOW;
+    if (strcmp(command, "myreservations") == 0 || strcmp(command, "myr") == 0) return CMD_TYPE_MY_RESERVATIONS;
     if (strcmp(command, "help") == 0) return CMD_TYPE_HELP;
     if (strcmp(command, "exit") == 0 || strcmp(command, "quit") == 0) return CMD_TYPE_EXIT;
     return CMD_TYPE_UNKNOWN;
@@ -1233,21 +1333,21 @@ int main(int argc, char *argv[]) {
             case CMD_TYPE_CREATE:
                 if (parsed == 6) {
                     int num_attendees = atoi(arg5);
-                    cmd_create(arg1, arg2, arg3, arg4, num_attendees);
+                    cmd_create_event(arg1, arg2, arg3, arg4, num_attendees);
                 } else {
                     printf("Usage: create name event_fname event_date event_time num_attendees\n");
                 }
                 break;
             case CMD_TYPE_CLOSE:
                 if (parsed == 2) {
-                    cmd_close(arg1);
+                    cmd_close_event(arg1);
                 } else {
                     printf("Usage: close EID\n");
                 }
                 break;
-            case CMD_TYPE_MYEVENTS:
+            case CMD_TYPE_MY_EVENTS:
                 if (parsed == 1) {
-                    cmd_mye();
+                    cmd_my_events();
                 }
                 else {
                     printf("Usage: myevents\n");
@@ -1255,7 +1355,7 @@ int main(int argc, char *argv[]) {
                 break;
             case CMD_TYPE_LIST:
                 if (parsed  ==  1) {
-                    cmd_list();
+                    cmd_list_events();
                 }
                 else {
                     printf("Usage: list\n");
@@ -1263,7 +1363,7 @@ int main(int argc, char *argv[]) {
                 break;
             case CMD_TYPE_SHOW:
                 if (parsed == 2) {
-                    cmd_show(arg1);
+                    cmd_show_event(arg1);
                 } else {
                     printf("Usage: show EID\n");
                 }
@@ -1271,6 +1371,11 @@ int main(int argc, char *argv[]) {
             case CMD_TYPE_RESERVE:
                 if (parsed == 3) {
                     cmd_reserve(arg1, atoi(arg2));
+                }
+                break;
+            case CMD_TYPE_MY_RESERVATIONS:
+                if (parsed == 1) {
+                    cmd_my_reservations();
                 }
                 break;
             case CMD_TYPE_HELP:

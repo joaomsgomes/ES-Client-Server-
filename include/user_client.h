@@ -28,11 +28,11 @@ void cmd_my_reservations(void);
 // ===== COMANDOS TCP (a implementar) =====
 void cmd_change_password(const char* old_pass, const char* new_pass);
 void cmd_create_event(const char* name, const char* filename, 
-                      const char* date, int seats);
-void cmd_close_event(int eid);
+                      const char* date, const char* time, int seats);
+void cmd_close_event(const char* eid_str);
 void cmd_list_events(void);
-void cmd_show_event(int eid);
-void cmd_reserve(int eid, int num_people);
+void cmd_show_event(const char *eid_str);
+void cmd_reserve(const char *eid_str, int num_people);
 
 // ===== FUNÇÕES AUXILIARES =====
 void show_help(void);

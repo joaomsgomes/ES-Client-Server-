@@ -154,6 +154,9 @@ int main(void) {
                         else if(strncmp(prt_str, CMD_MYEVENTS, 3) == 0) {
                             handle_my_events(ufd, prt_str, &_useraddr, addrlen);
                         }
+                        else if(strncmp(prt_str, CMD_MY_RESERVATIONS, 3) == 0) {
+                            handle_my_reservations(ufd, prt_str, &_useraddr, addrlen);
+                        }
                         else if(!memcmp(prt_str,"_STOP",5))
                         {
                             write(1,"Terminating\n",12);

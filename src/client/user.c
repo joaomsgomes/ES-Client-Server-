@@ -1195,7 +1195,7 @@ void cmd_my_reservations() {
         char time[TIME_STR_LEN + 4]; // espaço para formato HH:MM:SS
         int num_seats;
 
-        while (sscanf(ptr, "%d %d %10s %8s", &eid, &num_seats, date, time) == 4) {
+        while (sscanf(ptr, "%d %10s %8s %d", &eid, date, time, &num_seats) == 4) {
             reservation_count++;
 
             printf("  %03d    %s   %s       %d \n", eid, date, time, num_seats);
@@ -1371,11 +1371,15 @@ int main(int argc, char *argv[]) {
             case CMD_TYPE_RESERVE:
                 if (parsed == 3) {
                     cmd_reserve(arg1, atoi(arg2));
+                } else {
+                    printf("Usage: reserve EID num_seats\n");
                 }
                 break;
             case CMD_TYPE_MY_RESERVATIONS:
                 if (parsed == 1) {
                     cmd_my_reservations();
+                } else {
+                    printf("Usage: myreservations\n");
                 }
                 break;
             case CMD_TYPE_HELP:

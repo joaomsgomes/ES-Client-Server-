@@ -435,7 +435,7 @@ void handle_my_reservations(int sockfd, char* message, struct sockaddr_in* clien
         fclose(fp);
         // Adicionar à resposta: " EID num_seats date time"
         offset += snprintf(response + offset, sizeof(response) - offset,
-                        " %d %d %s %s", file_eid, num_seats, date, time);
+                        " %d %s %s %d", file_eid, date, time, num_seats);
         reservation_count++;
 
         free(entries[i]);

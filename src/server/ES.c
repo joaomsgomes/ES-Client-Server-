@@ -78,13 +78,31 @@ int main(void) {
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE | AI_NUMERICSERV;
 
-    getaddrinfo(NULL, MYPORT, &hints, &res);
+    if((errcode = getaddrinfo(NULL, MYPORT, &hints, &res)) != 0) {
+        sprintf(prt_str,"getaddrinfo error TCP server: %s\n", gai_strerror(errcode));
+        write(1, prt_str, strlen(prt_str));
+        exit(1);
+    }
+    
     tfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-    bind(tfd, res->ai_addr, res->ai_addrlen);
+    if(tfd == -1) {
+        sprintf(prt_str,"Socket error TCP server\n");
+        write(1, prt_str, strlen(prt_str));
+        freeaddrinfo(res);
+        exit(1);
+    }
+    
+    if(bind(tfd, res->ai_addr, res->ai_addrlen) == -1) {
+        sprintf(prt_str,"Bind error TCP server\n");
+        write(1, prt_str, strlen(prt_str));
+        freeaddrinfo(res);
+        exit(1);
+    }
     
     if (listen(tfd, 5) == -1 ) {
-        sprintf(prt_str,"Bind error TCP server\n");
+        sprintf(prt_str,"Listen error TCP server\n");
         write(1,prt_str,strlen(prt_str));
+        freeaddrinfo(res);
         exit(1);
     }
     
@@ -131,6 +149,8 @@ int main(void) {
                 }
                 // Input done by UDP socket
                 if(FD_ISSET(ufd,&testfds)) {
+                    // Limpar e reinicializar endereço antes de cada recvfrom
+                    memset(&_useraddr, 0, sizeof(_useraddr));
                     addrlen = sizeof(_useraddr);
                     ret = recvfrom(ufd,prt_str,80,0,(struct sockaddr *)&_useraddr,&addrlen);
                     if(ret>0)
@@ -138,8 +158,11 @@ int main(void) {
                         prt_str[ret]='\0';
                         printf("---UDP received: %s",prt_str);
                         errcode=getnameinfo( (struct sockaddr *) &_useraddr,addrlen,host,sizeof host, service,sizeof service,0);
-                        if(errcode==0)
-                            printf("       From [%s:%s]\n",host,service);
+                        if(errcode==0) {
+                            printf("       From [%s:%s], addrlen=%d, family=%d\n",host,service, addrlen, _useraddr.sin_family);
+                        } else {
+                            printf("       getnameinfo failed: %s\n", gai_strerror(errcode));
+                        }
                         
                        
                         if(strncmp(prt_str, CMD_LOGIN, 3) == 0) {

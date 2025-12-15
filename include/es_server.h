@@ -5,7 +5,7 @@
 #include <stdbool.h>
 
 
-#define MYPORT "58000"
+#define MYPORT "58084"
 
 #define MAX_USERS 1000
 #define MAX_EVENTS 999

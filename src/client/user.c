@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <unistd.h>
+#include <errno.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -58,6 +59,18 @@ bool init_udp_connection(const char* server_ip, const char* server_port) {
         return false;
     }
     
+    // Configurar timeout de 5 segundos para recvfrom
+    struct timeval timeout;
+    timeout.tv_sec = 5;
+    timeout.tv_usec = 0;
+    
+    if (setsockopt(client_state.udp_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+        perror("Error setting socket timeout");
+        close(client_state.udp_socket);
+        freeaddrinfo(client_state.server_addr);
+        return false;
+    }
+    
     printf("Connected to ES server at %s:%s\n", server_ip, server_port);
     return true;
 }
@@ -86,7 +99,11 @@ bool send_udp_receive_response(const char* message, char* response, size_t respo
                  (struct sockaddr*)&server_sockaddr, &addrlen);
     
     if (n == -1) {
-        perror("Error receiving UDP response");
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            fprintf(stderr, "Error: Server response timeout (no response received)\n");
+        } else {
+            perror("Error receiving UDP response");
+        }
         return false;
     }
     
@@ -364,8 +381,6 @@ void cmd_create_event(const char* name, const char* event_fname, const char* eve
         return;
     }
     
-    printf("Creating event '%s' on %s %s with %d seats...\n", name, event_date, event_time, num_attendees);
-    
     // Conectar ao servidor TCP
     int tcp_socket = tcp_connect_to_server();
     if (tcp_socket == -1) {
@@ -420,8 +435,6 @@ void cmd_create_event(const char* name, const char* event_fname, const char* eve
     
     free(filedata);
     
-    printf("Command sent successfully, waiting for response...\n");
-    
     // Receber resposta: "RCE status [EID]\n"
     char response[64];
     ssize_t resp_len = read(tcp_socket, response, sizeof(response) - 1);
@@ -445,11 +458,11 @@ void cmd_create_event(const char* name, const char* event_fname, const char* eve
     
     // Processar status
     if (strcmp(status, STATUS_OK) == 0 && parsed == 3) {
-        printf("✓ Event created successfully!\n");
-        printf("  EID: %s\n", eid);
-        printf("  Name: %s\n", name);
-        printf("  Date: %s %s\n", event_date, event_time);
-        printf("  Attendees: %d\n", num_attendees);
+        printf("Event created successfully!\n");
+        printf("EID: %s\n", eid);
+        printf("Name: %s\n", name);
+        printf("Date: %s %s\n", event_date, event_time);
+        printf("Attendees: %d\n", num_attendees);
     } else if (strcmp(status, STATUS_NOK) == 0) {
         printf("Error: Failed to create event (database full?)\n");
     } else if (strcmp(status, STATUS_NLG) == 0) {
@@ -482,8 +495,6 @@ void cmd_close_event(const char* eid_str) {
         printf("Error: Invalid EID (must be between 1 and 999)\n");
         return;
     }
-    
-    printf("Closing event EID=%03d...\n", eid);
     
     // Conectar ao servidor TCP
     int tcp_socket = tcp_connect_to_server();
@@ -536,8 +547,8 @@ void cmd_close_event(const char* eid_str) {
     
     // Processar status
     if (strcmp(status, STATUS_OK) == 0) {
-        printf("✓ Event closed successfully!\n");
-        printf("  EID %03d is now closed for new reservations\n", eid);
+        printf("Event closed successfully\n");
+
     } else if (strcmp(status, STATUS_NOK) == 0) {
         printf("Error: User does not exist or wrong password\n");
     } else if (strcmp(status, STATUS_NLG) == 0) {
@@ -593,9 +604,9 @@ void cmd_my_events() {
         int event_count = 0;
         
         printf("\n═══════════════════════════════════════════════════════\n");
-        printf("  Your Events\n");
+        printf("  My Events:\n");
         printf("═══════════════════════════════════════════════════════\n");
-        printf("  EID    Status\n");
+        printf("  EID    State\n");
         printf("───────────────────────────────────────────────────────\n");
         
         int eid, state;

@@ -136,6 +136,19 @@ void cmd_login(const char* uid, const char* password) {
     char message[64];
     char response[64];
     
+    // Verificar se já existe outro utilizador logado neste terminal
+    if (client_state.is_logged_in) {
+        if (strcmp(client_state.logged_uid, uid) != 0) {
+            printf("Error: User %s is already logged in. Please logout first.\n", 
+                   client_state.logged_uid);
+            return;
+        } else {
+            // Mesmo utilizador já está logado
+            printf("User %s is already logged in\n", uid);
+            return;
+        }
+    }
+    
     // Validar formato antes de enviar
     if (strlen(uid) != 6) {
         printf("Error: UID must be exactly 6 digits\n");
@@ -951,10 +964,7 @@ void cmd_show_event(const char* eid_str) {
             free(response);
             return;
         }
-        
-        // Encontrar onde começa o Fdata
-        // O sscanf lê até ao último número (fsize), mas não consome o espaço seguinte
-        // Precisamos saltar: "RSE OK " + os 8 campos + espaços entre eles
+    
         char *fdata_ptr = ptr;  // ptr já aponta depois de "RSE OK "
         
         // Saltar os 8 campos que já lemos

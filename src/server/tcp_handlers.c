@@ -82,10 +82,16 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
     long filesize;
     char response[64];
     
+    printf("[TCP] CREATE: Received %zd bytes total\n", n);
+    printf("[TCP] CREATE: Buffer content (first 100 bytes): '%.*s'\n", (int)(n > 100 ? 100 : n), buffer);
+    
     // Parse do comando (sem Fdata ainda):
     // CRE UID password name date time attendance Fname Fsize
     int parsed = sscanf(buffer, "%3s %6s %8s %10s %10s %5s %d %24s %ld",
                        cmd, uid, password, name, date, time, &attendance, filename, &filesize);
+    
+    printf("[TCP] CREATE: Parsed %d fields: cmd=%s uid=%s name=%s date=%s time=%s attendance=%d fname=%s fsize=%ld\n",
+           parsed, cmd, uid, name, date, time, attendance, filename, filesize);
     
     if (parsed != 9) {
         // Formato inválido
@@ -151,23 +157,30 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
     }
     
     // Encontrar posição do Fdata no buffer
-    // O formato é: "CRE UID password name date attendance Fname Fsize "
+    // O formato é: "CRE UID password name date time attendance Fname Fsize "
     // Depois disso vem o Fdata (dados binários)
     
     char *filedata_ptr = buffer;
     int header_fields = 0;
     
+    printf("[TCP] CREATE: Looking for file data start position...\n");
+    
     // Avançar pelos primeiros 9 campos (CRE, UID, password, name, date, time, attendance, Fname, Fsize)
     while (header_fields < 9 && filedata_ptr < buffer + n) {
         if (*filedata_ptr == ' ') {
             header_fields++;
+            printf("[TCP] CREATE: Found field %d at position %ld\n", header_fields, filedata_ptr - buffer);
         }
         filedata_ptr++;
     }
     
-    // Verificar se temos dados suficientes
-    long remaining_bytes = n - (filedata_ptr - buffer);
+    long header_size = filedata_ptr - buffer;
+    long remaining_bytes = n - header_size;
     
+    printf("[TCP] CREATE: Header size=%ld bytes, remaining=%ld bytes, expected file=%ld bytes\n", 
+           header_size, remaining_bytes, filesize);
+    
+    // Verificar se temos dados suficientes
     if (remaining_bytes < filesize) {
         // Faltam dados - precisamos ler mais do socket
         snprintf(response, sizeof(response), "%s %s\n", RSP_CREATE, STATUS_ERR);

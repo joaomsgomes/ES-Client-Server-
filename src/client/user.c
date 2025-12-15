@@ -389,6 +389,8 @@ void cmd_create_event(const char* name, const char* event_fname, const char* eve
     }
     
     
+    // Construir header SEM espaço extra no final
+    // Formato: "CRE UID password name date time attendance Fname Fsize " + filedata + "\n"
     char header[256];
     int header_len = snprintf(header, sizeof(header),
                               "%s %s %s %s %s %s %d %s %ld ",
@@ -401,6 +403,8 @@ void cmd_create_event(const char* name, const char* event_fname, const char* eve
         free(filedata);
         return;
     }
+    
+    printf("[DEBUG] Sending CREATE: header_len=%d, filesize=%ld\n", header_len, filesize);
     
     // Alocar buffer para mensagem completa (header + filedata + newline)
     size_t total_size = header_len + filesize + 1;
@@ -416,6 +420,9 @@ void cmd_create_event(const char* name, const char* event_fname, const char* eve
     memcpy(full_message, header, header_len);
     memcpy(full_message + header_len, filedata, filesize);
     full_message[header_len + filesize] = '\n';
+    
+    printf("[DEBUG] Total message size: %zu bytes (header=%d + file=%ld + newline=1)\n", 
+           total_size, header_len, filesize);
 
     size_t total_sent = 0;
 

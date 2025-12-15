@@ -206,11 +206,32 @@ int main(void) {
                             printf("[TCP] ERROR: Memory allocation failed\n");
                             close(client_fd);
                         } else {
-                            ssize_t bytes_read = read(client_fd, tcp_buffer, MAX_FILE_SIZE + 1024);
+                            // Ler dados em loop até receber tudo (pode chegar em múltiplos pacotes)
+                            ssize_t total_read = 0;
+                            ssize_t bytes_read;
                             
+                            bytes_read = read(client_fd, tcp_buffer, MAX_FILE_SIZE + 1024);
                             if (bytes_read > 0) {
-                                tcp_buffer[bytes_read] = '\0'; 
-                                printf("[TCP] Received %zd bytes\n", bytes_read);
+                                total_read = bytes_read;
+                                // REVER!!!!
+                                // Se for CREATE, precisamos ler mais dados (filedata pode vir em pacotes separados)
+                                if (bytes_read >= 3 && strncmp(tcp_buffer, CMD_CREATE, 3) == 0) {
+                                    struct timeval tv;
+                                    tv.tv_sec = 1;  // timeout de 1 segundo
+                                    tv.tv_usec = 0;
+                                    setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+                                    
+                                    while (total_read < MAX_FILE_SIZE + 1024) {
+                                        bytes_read = read(client_fd, tcp_buffer + total_read, 
+                                                        MAX_FILE_SIZE + 1024 - total_read);
+                                        if (bytes_read <= 0) break;  // timeout ou fim de dados
+                                        total_read += bytes_read;
+                                    }
+                                }
+                                
+                                tcp_buffer[total_read] = '\0'; 
+                                printf("[TCP] Received %zd bytes (total)\n", total_read);
+                                bytes_read = total_read;
                                 
                                 // Identificar comando (primeiros 3 caracteres)
                                 if (bytes_read >= 3) {

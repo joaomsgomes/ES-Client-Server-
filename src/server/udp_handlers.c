@@ -257,6 +257,9 @@ void handle_my_events(int sockfd, char* message, struct sockaddr_in* client_addr
         int eid = atoi(entries[i]->d_name);
         
         if (eid >= 1 && eid <= 999) {
+            // Auto-fechar se o evento já passou
+            auto_close_if_past(eid);
+            
             // Obter estado do evento
             int state = get_event_state(eid);
             

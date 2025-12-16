@@ -256,6 +256,61 @@ int get_event_state(int eid) {
     return 1; // Ativo
 }
 
+/**
+ * Fecha automaticamente um evento se a data já passou
+ * Retorna: 1 se fechou, 0 se não fechou, -1 se erro
+ */
+int auto_close_if_past(int eid) {
+    if (!event_exists(eid)) return -1;
+    
+    // Verificar se já tem ficheiro END (já está fechado)
+    char end_filename[64];
+    snprintf(end_filename, sizeof(end_filename), "EVENTS/%03d/END_%03d.txt", eid, eid);
+    struct stat st;
+    if (stat(end_filename, &st) == 0) {
+        return 0; // Já está fechado
+    }
+    
+    // Ler data do evento
+    char start_file[128];
+    snprintf(start_file, sizeof(start_file), "EVENTS/%03d/START_%03d.txt", eid, eid);
+    
+    FILE *fp = fopen(start_file, "r");
+    if (!fp) return -1;
+    
+    char uid[7], name[11], fname[25], date[11], event_time_str[6];
+    int total_seats;
+    
+    if (fscanf(fp, "%6s %10s %24s %d %10s %5s", uid, name, fname, &total_seats, date, event_time_str) != 6) {
+        fclose(fp);
+        return -1;
+    }
+    fclose(fp);
+    
+    // Verificar se data já passou usando a função utilitária (inclui hora)
+    char full_datetime[20];
+    snprintf(full_datetime, sizeof(full_datetime), "%s %s", date, event_time_str);
+    
+    if (!is_date_before_now(full_datetime)) {
+        return 0; // Ainda não passou
+    }
+    
+    // Evento passou - criar ficheiro END automaticamente
+    FILE *end_fp = fopen(end_filename, "w");
+    if (!end_fp) {
+        fprintf(stderr, "[EVENT] Failed to auto-close EID=%03d\n", eid);
+        return -1;
+    }
+    
+    char timestamp[32];
+    get_current_timestamp(timestamp, sizeof(timestamp));
+    fprintf(end_fp, "%s [AUTO-CLOSED: event date passed]\n", timestamp);
+    fclose(end_fp);
+    
+    printf("[EVENT] Auto-closed past event EID=%03d at %s\n", eid, timestamp);
+    return 1; // Fechou agora
+}
+
 
 /**
  * Fecha um evento

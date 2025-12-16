@@ -10,7 +10,9 @@
 bool validate_uid(const char* uid);
 bool validate_password(const char* password);
 bool validate_event_name(const char* name);
-bool validate_date(const char* date);
+bool validate_datetime_format(const char* date, const char* time);
+bool validate_datetime_range(const char* date, const char* time);
+bool validate_datetime(const char* date, const char* time);
 
 // ============ CONSTANTS ============
 
@@ -20,8 +22,9 @@ bool validate_date(const char* date);
 
 
 // ============ DATE FUNCTIONS ============
-void get_current_date(char* buffer);
+void get_current_datetime(char* buffer);
 int compare_dates(const char* date1, const char* date2);
+bool is_date_before_now(const char* date);
 
 
 #endif // UTILS_H

@@ -79,42 +79,92 @@ bool validate_event_name(const char* name) {
     return true;
 }
 
-bool validate_date(const char* date) {
+bool validate_datetime_format(const char* date, const char* time) {
+    // Validar formato completo: dd-mm-yyyy hh:mm
     if (!date || strlen(date) != 10) return false;
-    // Format: dd-mm-yyyy
+    if (!time || strlen(time) != 5) return false;
+    
+    // Validar formato da data: dd-mm-yyyy
     if (date[2] != '-' || date[5] != '-') return false;
-    // Validate digits
     for (int i = 0; i < 10; i++) {
         if (i == 2 || i == 5) continue;
         if (!isdigit(date[i])) return false;
     }
-    // Validate day, month, year ranges
+    
+    // Validar formato do tempo: hh:mm
+    if (time[2] != ':') return false;
+    for (int i = 0; i < 5; i++) {
+        if (i == 2) continue;
+        if (!isdigit(time[i])) return false;
+    }
+    
+    return true;
+}
+
+bool validate_datetime_range(const char* date, const char* time) {
+    // Validar ranges de data e hora
     int day = (date[0] - '0') * 10 + (date[1] - '0');
     int month = (date[3] - '0') * 10 + (date[4] - '0');
     int year = (date[6] - '0') * 1000 + (date[7] - '0') * 100 + 
                (date[8] - '0') * 10 + (date[9] - '0');
     
-    if (day < 1 || day > 31) return false;
+    int hour = (time[0] - '0') * 10 + (time[1] - '0');
+    int min = (time[3] - '0') * 10 + (time[4] - '0');
+    
+    // Validar ranges básicos
     if (month < 1 || month > 12) return false;
-    if (year < 2025) return false;
+    if (year < 1900 || year > 2100) return false;
+    if (hour < 0 || hour > 23) return false;
+    if (min < 0 || min > 59) return false;
+    
+    // Validar dia conforme o mês
+    int days_in_month[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    
+    // Verificar ano bissexto
+    bool is_leap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+    if (is_leap && month == 2) {
+        days_in_month[1] = 29;
+    }
+    
+    if (day < 1 || day > days_in_month[month - 1]) return false;
     
     return true;
 }
 
-void get_current_date(char* buffer) {
+bool validate_datetime(const char* date, const char* time) {
+    return validate_datetime_format(date, time) && validate_datetime_range(date, time);
+}
+
+void get_current_datetime(char* buffer) {
     time_t now = time(NULL);
     struct tm* t = localtime(&now);
-    sprintf(buffer, "%02d-%02d-%04d", t->tm_mday, t->tm_mon + 1, t->tm_year + 1900);
+    sprintf(buffer, "%02d-%02d-%04d %02d:%02d", 
+            t->tm_mday, t->tm_mon + 1, t->tm_year + 1900,
+            t->tm_hour, t->tm_min);
+
 }
 
 int compare_dates(const char* date1, const char* date2) {
     // Returns: -1 if date1 < date2, 0 if equal, 1 if date1 > date2
-    int y1, m1, d1, y2, m2, d2;
-    sscanf(date1, "%d-%d-%d", &d1, &m1, &y1);
-    sscanf(date2, "%d-%d-%d", &d2, &m2, &y2);
+    // Suporta: "dd-mm-yyyy" ou "dd-mm-yyyy hh:mm"
+    int y1, m1, d1, h1 = 0, min1 = 0;
+    int y2, m2, d2, h2 = 0, min2 = 0;
+    
+    sscanf(date1, "%d-%d-%d %d:%d", &d1, &m1, &y1, &h1, &min1);
+    sscanf(date2, "%d-%d-%d %d:%d", &d2, &m2, &y2, &h2, &min2);
     
     if (y1 != y2) return (y1 < y2) ? -1 : 1;
     if (m1 != m2) return (m1 < m2) ? -1 : 1;
     if (d1 != d2) return (d1 < d2) ? -1 : 1;
+    if (h1 != h2) return (h1 < h2) ? -1 : 1;
+    if (min1 != min2) return (min1 < min2) ? -1 : 1;
     return 0;
+}
+
+bool is_date_before_now(const char* date) {
+    // Verifica se a data fornecida é anterior à data/hora atual
+    // Suporta: "dd-mm-yyyy" ou "dd-mm-yyyy hh:mm"
+    char current_datetime[20];
+    get_current_datetime(current_datetime);
+    return compare_dates(date, current_datetime) < 0;
 }

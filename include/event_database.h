@@ -8,6 +8,7 @@ int create_event(Event *ev);
 int get_event(int eid, Event *ev);
 int close_event(const char* uid, int eid);
 int get_event_state(int eid);
+int auto_close_if_past(int eid);
 int get_event_seats(int eid, int *total_seats, int *reserved_seats);
 int is_event_owner(const char *uid, int eid);
 

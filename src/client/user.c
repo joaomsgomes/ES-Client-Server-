@@ -199,7 +199,7 @@ void cmd_login(const char* uid, const char* password) {
         strcpy(client_state.logged_password, password);
         strcpy(client_state.logged_password, password);
         client_state.is_logged_in = true;
-        printf("Login successful\n");
+        printf("User logged in successfully\n");
         
     } else if (strcmp(status, STATUS_REG) == 0) {
         strcpy(client_state.logged_uid, uid);
@@ -238,7 +238,7 @@ void cmd_logout() {
 
     if (strcmp(status, STATUS_OK) == 0) {
         client_state.is_logged_in = false;
-        printf("Successful logout\n");
+        printf("User logged out successfully\n");
         
     } else if (strcmp(status, STATUS_NOK) == 0) {
         printf("Error: User not logged in\n");
@@ -312,17 +312,24 @@ void cmd_create_event(const char* name, const char* event_fname, const char* eve
         return;
     }
     
-    if (!validate_date(event_date)) {
-        printf("Event date: %s\n", event_date);
-        printf("Error: Invalid date format (use dd-mm-yyyy)\n");
+    if (!validate_datetime_format(event_date, event_time)) {
+        printf("Error: Invalid format - use dd-mm-yyyy hh:mm\n");
         return;
     }
     
-    // Validar formato da hora (hh:mm)
-    if (strlen(event_time) != 5 || event_time[2] != ':') {
-        printf("Error: Invalid time format (use hh:mm)\n");
+    if (!validate_datetime_range(event_date, event_time)) {
+        printf("Error: Date/time out of valid range (day: 1-31, month: 1-12, year: 1900-2100, hour: 0-23, minute: 0-59)\n");
         return;
     }
+    
+    // Validar que a data/hora não é passada
+    char full_datetime[20];
+    snprintf(full_datetime, sizeof(full_datetime), "%s %s", event_date, event_time);
+    if (is_date_before_now(full_datetime)) {
+        printf("Error: Event date cannot be in the past\n");
+        return;
+    }
+
     
     if (num_attendees < 10 || num_attendees > 999) {
         printf("Error: Attendance must be between 10 and 999\n");
@@ -404,8 +411,6 @@ void cmd_create_event(const char* name, const char* event_fname, const char* eve
         return;
     }
     
-    printf("[DEBUG] Sending CREATE: header_len=%d, filesize=%ld\n", header_len, filesize);
-    
     // Alocar buffer para mensagem completa (header + filedata + newline)
     size_t total_size = header_len + filesize + 1;
     char *full_message = malloc(total_size);
@@ -420,9 +425,6 @@ void cmd_create_event(const char* name, const char* event_fname, const char* eve
     memcpy(full_message, header, header_len);
     memcpy(full_message + header_len, filedata, filesize);
     full_message[header_len + filesize] = '\n';
-    
-    printf("[DEBUG] Total message size: %zu bytes (header=%d + file=%ld + newline=1)\n", 
-           total_size, header_len, filesize);
 
     size_t total_sent = 0;
 
@@ -466,10 +468,11 @@ void cmd_create_event(const char* name, const char* event_fname, const char* eve
     // Processar status
     if (strcmp(status, STATUS_OK) == 0 && parsed == 3) {
         printf("Event created successfully!\n");
-        printf("EID: %s\n", eid);
-        printf("Name: %s\n", name);
-        printf("Date: %s %s\n", event_date, event_time);
-        printf("Attendees: %d\n", num_attendees);
+        printf("───────────────────────────────\n");
+        printf("    Event ID: %s\n", eid);
+        printf("    Event Name: %s\n", name);
+        printf("    Event Date: %s %s\n", event_date, event_time);
+        printf("    Number of Attendees: %d\n", num_attendees);
     } else if (strcmp(status, STATUS_NOK) == 0) {
         printf("Error: Failed to create event (database full?)\n");
     } else if (strcmp(status, STATUS_NLG) == 0) {
@@ -610,11 +613,9 @@ void cmd_my_events() {
         char *ptr = response + 7;  // Saltar "RME OK "
         int event_count = 0;
         
-        printf("\n═══════════════════════════════════════════════════════\n");
-        printf("  My Events:\n");
-        printf("═══════════════════════════════════════════════════════\n");
+        printf("My Events:\n\n");
         printf("  EID    State\n");
-        printf("───────────────────────────────────────────────────────\n");
+        printf("───────────────────────────────────────────\n");
         
         int eid, state;
         while (sscanf(ptr, "%d %d", &eid, &state) == 2) {
@@ -634,7 +635,7 @@ void cmd_my_events() {
                     status_str = "Sold out";
                     break;
                 case 3:
-                    status_str = "Closed by you";
+                    status_str = "Closed";
                     break;
                 default:
                     status_str = "Unknown";
@@ -653,9 +654,9 @@ void cmd_my_events() {
             
         }
         
-        printf("───────────────────────────────────────────────────────\n");
+        printf("───────────────────────────────────────────\n");
         printf("  Total: %d event(s)\n", event_count);
-        printf("═══════════════════════════════════════════════════════\n\n");
+        
         
     } else if (strcmp(status, STATUS_NOK) == 0) {
         printf("You have not created any events yet\n");
@@ -704,6 +705,9 @@ void cmd_list_events() {
     bool got_header = false;
     int event_count = 0;
     int iteration = 0;
+
+    printf("  Event ID      Event Name          Event State      Event Date\n");
+    printf("─────────────────────────────────────────────────────────────────\n");
 
     while (1) {
         iteration++;
@@ -761,6 +765,7 @@ void cmd_list_events() {
             pos = (size_t)consumed;
         }
 
+
         int events_this_iter = 0;
         while (pos < work_len) {
             // Verificar se encontramos o '\n' final
@@ -791,7 +796,7 @@ void cmd_list_events() {
                 else if (state == 3) status_str = "Closed";
                 else status_str = "Unknown";
 
-                printf("EID: %03d | Name: %s | State: %s | Date: %s %s\n",
+                printf("    %03d          %s             %s      %s %s\n",
                        eid, name, status_str, date, time);
 
                 pos += (size_t)consumed;
@@ -813,6 +818,7 @@ void cmd_list_events() {
     }
 
     close(tcp_socket);
+    printf("─────────────────────────────────────────────────────────────────\n");
     printf("Total events listed: %d\n", event_count);
 }
 
@@ -1035,30 +1041,30 @@ void cmd_show_event(const char* eid_str) {
         }
         
         // Mostrar informações
-        printf("\n╔═══════════════════════════════════════════════════╗\n");
-        printf("║           EVENT DETAILS - EID %s               ║\n", eid_str);
-        printf("╠═══════════════════════════════════════════════════╣\n");
-        printf("║  Name:         %-35s║\n", event_name);
-        printf("║  Date & Time:  %s %s%-20s║\n", event_date, event_time, "");
-        printf("║  Owner:        %-35s║\n", uid);
-        printf("╠═══════════════════════════════════════════════════╣\n");
-        printf("║  Total Seats:     %-28d    ║\n", num_attendees);
-        printf("║  Reserved:        %-28d    ║\n", num_reserved);
-        printf("║  Available:       %-28d    ║\n", num_attendees - num_reserved);
-        printf("╠═══════════════════════════════════════════════════╣\n");
-        
-        // Determinar status (sold-out?)
+        printf("Event %s Details:\n", eid_str);
+        printf("────────────────────────────────────────────────────────────\n");
+        printf("  Name:             %-35s\n", event_name);
+        printf("  Date & Time:      %s %s%-20s\n", event_date, event_time, "");
+        printf("  Host:             %-35s\n", uid);
+        printf("────────────────────────────────────────────────────────────\n");
+        printf("  Total Seats:      %-28d\n", num_attendees);
+        printf("  Reserved:         %-28d\n", num_reserved);
+        printf("  Available:        %-28d\n", num_attendees - num_reserved);
+        printf("────────────────────────────────────────────────────────────\n");
+        printf("  Description file:             %-35s\n", fname);
+        printf("  File Size:             %-25ld bytes\n", fsize);
+
+        // Determinar status (sold-out ou passado)
+        char full_datetime[20];
+        snprintf(full_datetime, sizeof(full_datetime), "%s %s", event_date, event_time);
         if (num_reserved >= num_attendees) {
-            printf("║  Status:       🔴 SOLD OUT                        ║\n");
-        } else {
-            printf("║  Status:       🟢 OPEN                            ║\n");
+            printf("────────────────────────────────────────────────────────────\n");
+            printf("  This event is sold-out!\n");
+        } else if (is_date_before_now(full_datetime)) {
+            printf("────────────────────────────────────────────────────────────\n");
+            printf("  This event already happened in the past!\n");
         }
-        
-        printf("╠═══════════════════════════════════════════════════╣\n");
-        printf("║  File:         %-35s║\n", fname);
-        printf("║  Size:         %-25ld bytes    ║\n", fsize);
-        printf("║  Saved to:     ./%s%-30s║\n", fname, "");
-        printf("╚═══════════════════════════════════════════════════╝\n\n");
+        printf("\n");
         
     } else if (strcmp(status, STATUS_NOK) == 0) {
         printf("Error: Event does not exist\n");
@@ -1121,8 +1127,6 @@ void cmd_reserve(const char* eid_str, int num_seats) {
     
     response[resp_len] = '\0';
 
-    printf("Message from ES: %s\n", response);
-
     char rsp_code[4], status[4];
     int parsed = sscanf(response, "%3s %3s", rsp_code, status);
 
@@ -1133,8 +1137,8 @@ void cmd_reserve(const char* eid_str, int num_seats) {
 
     if (strcmp(status, STATUS_ACC) == 0) {
         
-        printf("Reservation successful!\n");
-
+        printf("Event reserved successfully!\n");
+        printf("────────────────────────────────────────────────────────────\n");
         if (num_seats == 1)  {            
             printf("  %d seat reserved for event %s\n", num_seats, eid_str);
         } else {
@@ -1145,6 +1149,7 @@ void cmd_reserve(const char* eid_str, int num_seats) {
         
         if (sscanf(response, "%3s %3s %d", rsp_code, status, &available_seats) == 3) {
             printf("Reservation rejected: not enough seats available\n");
+            printf("────────────────────────────────────────────────────────────\n");
             printf("  Requested: %d seats\n", num_seats);
             printf("  Available: %d seats\n", available_seats);
         
@@ -1213,11 +1218,10 @@ void cmd_my_reservations() {
         char *ptr = response + 7;  // Saltar "RMR OK "
         int reservation_count = 0;
 
-        printf("\n═══════════════════════════════════════════════════════\n");
-        printf("  Your Reservations\n");
-        printf("═══════════════════════════════════════════════════════\n");
-        printf("  EID      Date       Time       Number of Seats\n");
-        printf("───────────────────────────────────────────────────────\n");
+        printf("  My Reservations\n");
+        printf("────────────────────────────────────────────────────────────\n");
+        printf("  Event ID         Date       Time       Number of Seats\n");
+        printf("────────────────────────────────────────────────────────────\n");
 
         int eid;
         char date[DATE_STR_LEN + 1];
@@ -1227,7 +1231,7 @@ void cmd_my_reservations() {
         while (sscanf(ptr, "%d %10s %8s %d", &eid, date, time, &num_seats) == 4) {
             reservation_count++;
 
-            printf("  %03d    %s   %s       %d \n", eid, date, time, num_seats);
+            printf("    %03d        %s   %s         %d \n", eid, date, time, num_seats);
             
             // Avançar para próximo conjunto EID date time value
             int spaces_count = 0;
@@ -1241,9 +1245,8 @@ void cmd_my_reservations() {
             
         }
 
-        printf("───────────────────────────────────────────────────────\n");
+        printf("────────────────────────────────────────────────────────────\n");
         printf("  Total: %d reservation(s)\n", reservation_count);
-        printf("═══════════════════════════════════════════════════════\n\n");
 
     } else if (strcmp(status, STATUS_NOK) == 0) {
         printf("You have no reservations yet\n");
@@ -1286,7 +1289,7 @@ CommandType parse_command_type(const char* command) {
 int main(int argc, char *argv[]) {
 
     char *server_ip = "localhost";
-    char *server_port = "58000";
+    char *server_port = "58084";
     char input[INPUT_BUFFER_SIZE];
     char command[32], arg1[32], arg2[32];
     

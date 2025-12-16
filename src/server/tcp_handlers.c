@@ -116,10 +116,27 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
         return;
     }
     
-    if (!validate_date(date)) {
+    if (!validate_datetime_format(date, time)) {
         snprintf(response, sizeof(response), "%s %s\n", RSP_CREATE, STATUS_ERR);
         write(client_fd, response, strlen(response));
-        printf("[TCP] CREATE: Invalid date format\n");
+        printf("[TCP] CREATE: Invalid format - use dd-mm-yyyy hh:mm\n");
+        return;
+    }
+    
+    if (!validate_datetime_range(date, time)) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_CREATE, STATUS_ERR);
+        write(client_fd, response, strlen(response));
+        printf("[TCP] CREATE: Date/time out of valid range\n");
+        return;
+    }
+    
+    // Validar que a data/hora não é passada
+    char full_datetime[20];
+    snprintf(full_datetime, sizeof(full_datetime), "%s %s", date, time);
+    if (is_date_before_now(full_datetime)) {
+        snprintf(response, sizeof(response), "%s %s\n", RSP_CREATE, STATUS_ERR);
+        write(client_fd, response, strlen(response));
+        printf("[TCP] CREATE: Event date cannot be in the past\n");
         return;
     }
     
@@ -395,6 +412,9 @@ void handle_list_events(int client_fd, char* buffer, ssize_t bytes_read) {
                 continue;  // Formato inválido, ignorar
             }
             
+            // Auto-fechar se o evento já passou
+            auto_close_if_past(eid);
+            
             // Obter estado do evento
             int state = get_event_state(eid);
             
@@ -499,6 +519,9 @@ void handle_reserve_seats(int client_fd, char* buffer, ssize_t bytes_read) {
         return;
     }
 
+    // Auto-fechar se o evento já passou
+    auto_close_if_past(eid);
+
     int event_state = get_event_state(eid);
     
     if (event_state == 0) {  // Past
@@ -594,6 +617,9 @@ void handle_show_event(int client_fd, char* buffer, ssize_t bytes_read) {
     }
 
     // Ler informações do evento do ficheiro START_eid.txt
+    // Auto-fechar se o evento já passou
+    auto_close_if_past(eid);
+    
     Event ev;
     
     if (get_event(eid, &ev) != 0) {

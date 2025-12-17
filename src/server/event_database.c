@@ -15,10 +15,14 @@
 int create_event(Event *ev) {
     if (!ev) return -1;
     
+    // PROTEÇÃO CONTRA CONCORRÊNCIA: Lock mutex durante criação de evento
+    pthread_mutex_lock(&event_creation_mutex);
+    
     // Obter próximo EID disponível
     int eid = get_next_eid();
     if (eid < 0) {
         fprintf(stderr, "[EVENT] No more EIDs available\n");
+        pthread_mutex_unlock(&event_creation_mutex);
         return -1;
     }
     
@@ -27,6 +31,7 @@ int create_event(Event *ev) {
     // Criar directoria do evento
     if (!create_event_directory(eid)) {
         fprintf(stderr, "[EVENT] Failed to create event directory for EID=%03d\n", eid);
+        pthread_mutex_unlock(&event_creation_mutex);
         return -1;
     }
     
@@ -53,6 +58,7 @@ int create_event(Event *ev) {
     fp = fopen(res_filename, "w");
     if (!fp) {
         fprintf(stderr, "[EVENT] Failed to create RES file for EID=%03d\n", eid);
+        pthread_mutex_unlock(&event_creation_mutex);
         return -1;
     }
     fprintf(fp, "0\n");
@@ -66,6 +72,7 @@ int create_event(Event *ev) {
         fp = fopen(desc_path, "wb");
         if (!fp) {
             fprintf(stderr, "[EVENT] Failed to save description file for EID=%03d\n", eid);
+            pthread_mutex_unlock(&event_creation_mutex);
             return -1;
         }
         
@@ -82,6 +89,9 @@ int create_event(Event *ev) {
         fprintf(fp, "Event %03d created\n", eid);
         fclose(fp);
     }
+    
+    // LIBERAR MUTEX: Criação do evento concluída
+    pthread_mutex_unlock(&event_creation_mutex);
     
     printf("[EVENT] Created event EID=%03d by UID=%s\n", eid, ev->uid);
     return 0;
@@ -407,6 +417,9 @@ int get_event_seats(int eid, int *total_seats, int *reserved_seats) {
 
 int create_reservation(int eid, const char *uid, int num_seats) {
 
+    // PROTEÇÃO CONTRA CONCORRÊNCIA: Lock mutex durante reserva
+    pthread_mutex_lock(&reservation_mutex);
+
     time_t now = time(NULL);
     struct tm *tm_info = localtime(&now);
     char timestamp[32];
@@ -433,7 +446,11 @@ int create_reservation(int eid, const char *uid, int num_seats) {
     snprintf(event_path, sizeof(event_path), "EVENTS/%03d/RESERVATIONS/%s", eid, user_filename);
     
     FILE *fp = fopen(event_path, "w");
-    if (!fp) {printf(" !fp\n"); return 0;}
+    if (!fp) {
+        printf(" !fp\n");
+        pthread_mutex_unlock(&reservation_mutex);
+        return 0;
+    }
     
     fprintf(fp, "%s", event_content);
     fclose(fp);
@@ -458,10 +475,17 @@ int create_reservation(int eid, const char *uid, int num_seats) {
     }
     
     fp = fopen(res_file, "w");
-    if (!fp) {printf("!fp\n"); return 0;}
+    if (!fp) {
+        printf("!fp\n");
+        pthread_mutex_unlock(&reservation_mutex);
+        return 0;
+    }
     
     fprintf(fp, "%d\n", current_reserved + num_seats);
     fclose(fp);
+    
+    // LIBERAR MUTEX: Reserva concluída
+    pthread_mutex_unlock(&reservation_mutex);
     
     printf("[DB] Created reservation:  ( UID = %s, EID=%03d, seats=%d)\n", uid, eid, num_seats);
     return 1;

@@ -3,6 +3,7 @@
 
 #include <netinet/in.h>
 #include <stdbool.h>
+#include <pthread.h>
 
 
 #define MYPORT "58084"
@@ -45,5 +46,9 @@ typedef struct {
     int num_seats;
 } Reservation;
 
+// Mutexes para proteção contra concorrência
+extern pthread_mutex_t event_creation_mutex;
+extern pthread_mutex_t user_auth_mutex;
+extern pthread_mutex_t reservation_mutex;
 
 #endif

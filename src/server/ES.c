@@ -21,6 +21,11 @@
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 
+// Mutexes globais para proteção contra concorrência
+pthread_mutex_t event_creation_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t user_auth_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t reservation_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 int main(void) {
 
     char in_str[ARRAY_SIZE];

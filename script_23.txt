@@ -1,0 +1,13 @@
+login 333333 cccccccc
+create BlackSeaGr blackseagrain.png 22-04-2026 09:00 500
+create Apollo11 Apollo11_Launch.jpg 16-07-2969 09:32 900
+create BlackSeaGr blackseagrain.png 22-04-2026 09:00 500
+create Apollo11 Apollo11_Launch.jpg 16-07-2969 09:32 900
+create BlackSeaGr blackseagrain.png 22-04-2026 09:00 500
+create Apollo11 Apollo11_Launch.jpg 16-07-2969 09:32 900
+create BlackSeaGr blackseagrain.png 22-04-2026 09:00 500
+create Apollo11 Apollo11_Launch.jpg 16-07-2969 09:32 900
+create BlackSeaGr blackseagrain.png 22-04-2026 09:00 500
+create Apollo11 Apollo11_Launch.jpg 16-07-2969 09:32 900
+logout
+exit

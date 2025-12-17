@@ -82,16 +82,16 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
     long filesize;
     char response[64];
     
-    printf("[TCP] CREATE: Received %zd bytes total\n", n);
-    printf("[TCP] CREATE: Buffer content (first 100 bytes): '%.*s'\n", (int)(n > 100 ? 100 : n), buffer);
+    //printf("[TCP] CREATE: Received %zd bytes total\n", n);
+    //printf("[TCP] CREATE: Buffer content (first 100 bytes): '%.*s'\n", (int)(n > 100 ? 100 : n), buffer);
     
     // Parse do comando (sem Fdata ainda):
     // CRE UID password name date time attendance Fname Fsize
     int parsed = sscanf(buffer, "%3s %6s %8s %10s %10s %5s %d %24s %ld",
                        cmd, uid, password, name, date, time, &attendance, filename, &filesize);
     
-    printf("[TCP] CREATE: Parsed %d fields: cmd=%s uid=%s name=%s date=%s time=%s attendance=%d fname=%s fsize=%ld\n",
-           parsed, cmd, uid, name, date, time, attendance, filename, filesize);
+    //printf("[TCP] CREATE: Parsed %d fields: cmd=%s uid=%s name=%s date=%s time=%s attendance=%d fname=%s fsize=%ld\n",
+    //       parsed, cmd, uid, name, date, time, attendance, filename, filesize);
     
     if (parsed != 9) {
         // Formato inválido
@@ -130,7 +130,10 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
         return;
     }
     
-    // Validar que a data/hora não é passada
+    // NOTA: Validação de data passada DESATIVADA para permitir eventos históricos nos testes
+    // Conforme especificação: "desactiva temporariamente a validação da data de ocorrência"
+    // O estado (past/active/sold-out/closed) é calculado dinamicamente em get_event_state()
+    /*
     char full_datetime[20];
     snprintf(full_datetime, sizeof(full_datetime), "%s %s", date, time);
     if (is_date_before_now(full_datetime)) {
@@ -139,6 +142,7 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
         printf("[TCP] CREATE: Event date cannot be in the past\n");
         return;
     }
+    */
     
     if (attendance < 10 || attendance > 999) {
         snprintf(response, sizeof(response), "%s %s\n", RSP_CREATE, STATUS_ERR);
@@ -178,9 +182,9 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
     // Depois disso vem o Fdata (dados binários)
     
     char *filedata_ptr = buffer;
-    int header_fields = 0;
+    //int header_fields = 0;
     
-    printf("[TCP] CREATE: Looking for file data start position...\n");
+    /*printf("[TCP] CREATE: Looking for file data start position...\n");
     
     // Avançar pelos primeiros 9 campos (CRE, UID, password, name, date, time, attendance, Fname, Fsize)
     while (header_fields < 9 && filedata_ptr < buffer + n) {
@@ -190,12 +194,12 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
         }
         filedata_ptr++;
     }
-    
+    */
     long header_size = filedata_ptr - buffer;
     long remaining_bytes = n - header_size;
     
-    printf("[TCP] CREATE: Header size=%ld bytes, remaining=%ld bytes, expected file=%ld bytes\n", 
-           header_size, remaining_bytes, filesize);
+    //printf("[TCP] CREATE: Header size=%ld bytes, remaining=%ld bytes, expected file=%ld bytes\n", 
+    //       header_size, remaining_bytes, filesize);
     
     // Verificar se temos dados suficientes
     if (remaining_bytes < filesize) {
@@ -443,6 +447,9 @@ void handle_list_events(int client_fd, char* buffer, ssize_t bytes_read) {
     
     // Adicionar newline final
     offset += snprintf(response + offset, sizeof(response) - offset, "\n");
+    
+    // DEBUG: Mostrar resposta completa
+    printf("[TCP] LIST: Full response (%d bytes): '%s'\n", offset, response);
     
     // Enviar resposta
     write(client_fd, response, strlen(response));

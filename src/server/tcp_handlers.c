@@ -182,19 +182,19 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
     // Depois disso vem o Fdata (dados binários)
     
     char *filedata_ptr = buffer;
-    //int header_fields = 0;
+    int header_fields = 0;
     
-    /*printf("[TCP] CREATE: Looking for file data start position...\n");
+    //printf("[TCP] CREATE: Looking for file data start position...\n");
     
     // Avançar pelos primeiros 9 campos (CRE, UID, password, name, date, time, attendance, Fname, Fsize)
     while (header_fields < 9 && filedata_ptr < buffer + n) {
         if (*filedata_ptr == ' ') {
             header_fields++;
-            printf("[TCP] CREATE: Found field %d at position %ld\n", header_fields, filedata_ptr - buffer);
+            //printf("[TCP] CREATE: Found field %d at position %ld\n", header_fields, filedata_ptr - buffer);
         }
         filedata_ptr++;
     }
-    */
+    
     long header_size = filedata_ptr - buffer;
     long remaining_bytes = n - header_size;
     

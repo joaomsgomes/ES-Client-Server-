@@ -659,7 +659,7 @@ void cmd_my_events() {
         
         
     } else if (strcmp(status, STATUS_NOK) == 0) {
-        printf("You have not created any events yet\n");
+        printf("You have not created any events yet.\n");
         
     } else if (strcmp(status, STATUS_NLG) == 0) {
         printf("Error: User not logged in\n");
@@ -706,8 +706,6 @@ void cmd_list_events() {
     int event_count = 0;
     int iteration = 0;
 
-    printf("  Event ID      Event Name          Event State      Event Date\n");
-    printf("─────────────────────────────────────────────────────────────────\n");
 
     while (1) {
         iteration++;
@@ -764,7 +762,10 @@ void cmd_list_events() {
             got_header = true;
             pos = (size_t)consumed;
         }
-
+        if (iteration == 1) {
+            printf("  Event ID      Event Name          Event State      Event Date\n");
+            printf("─────────────────────────────────────────────────────────────────\n");
+        }
 
         int events_this_iter = 0;
         while (pos < work_len) {
@@ -1249,7 +1250,7 @@ void cmd_my_reservations() {
         printf("  Total: %d reservation(s)\n", reservation_count);
 
     } else if (strcmp(status, STATUS_NOK) == 0) {
-        printf("You have no reservations yet\n");
+        printf("You have no reservations yet.\n");
 
     } else if (strcmp(status, STATUS_NLG) == 0) {
         printf("Error: User not logged in\n");

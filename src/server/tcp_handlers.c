@@ -417,7 +417,8 @@ void handle_list_events(int client_fd, char* buffer, ssize_t bytes_read) {
             }
             
             // Auto-fechar se o evento já passou
-            auto_close_if_past(eid);
+            // TODO: ATIVAR DEPOIS DE TESTES
+            //auto_close_if_past(eid); 
             
             // Obter estado do evento
             int state = get_event_state(eid);
@@ -425,7 +426,7 @@ void handle_list_events(int client_fd, char* buffer, ssize_t bytes_read) {
             // Adicionar à resposta: " EID name state event_date"
             // Formato completo da data: "dd-mm-yyyy hh:mm"
             offset += snprintf(response + offset, sizeof(response) - offset, 
-                             " %d %s %d %s %s", 
+                             " %03d %s %d %s %s", 
                              eid, event_name, state, event_date, event_time);
             event_count++;
             

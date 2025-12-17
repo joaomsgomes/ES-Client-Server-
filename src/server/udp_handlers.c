@@ -265,7 +265,7 @@ void handle_my_events(int sockfd, char* message, struct sockaddr_in* client_addr
             
             // Adicionar à resposta: " EID state"
             offset += snprintf(response + offset, sizeof(response) - offset, 
-                             " %d %d", eid, state);
+                             " %03d %d", eid, state);
             event_count++;
             
             printf("[UDP] MYEVENTS: Found event %03d with state %d for user %s\n", 
@@ -458,7 +458,7 @@ void handle_my_reservations(int sockfd, char* message, struct sockaddr_in* clien
         fclose(fp);
         // Adicionar à resposta: " EID num_seats date time"
         offset += snprintf(response + offset, sizeof(response) - offset,
-                        " %d %s %s %d", file_eid, date, time, num_seats);
+                        " %03d %s %s %d", file_eid, date, time, num_seats);
         reservation_count++;
 
         free(entries[i]);

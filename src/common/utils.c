@@ -113,7 +113,6 @@ bool validate_datetime_range(const char* date, const char* time) {
     
     // Validar ranges básicos
     if (month < 1 || month > 12) return false;
-    if (year < 1900 || year > 2100) return false;
     if (hour < 0 || hour > 23) return false;
     if (min < 0 || min > 59) return false;
     

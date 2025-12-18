@@ -102,6 +102,7 @@ bool validate_datetime_format(const char* date, const char* time) {
 }
 
 bool validate_datetime_range(const char* date, const char* time) {
+
     // Validar ranges de data e hora
     int day = (date[0] - '0') * 10 + (date[1] - '0');
     int month = (date[3] - '0') * 10 + (date[4] - '0');
@@ -144,8 +145,7 @@ void get_current_datetime(char* buffer) {
 }
 
 int compare_dates(const char* date1, const char* date2) {
-    // Returns: -1 if date1 < date2, 0 if equal, 1 if date1 > date2
-    // Suporta: "dd-mm-yyyy" ou "dd-mm-yyyy hh:mm"
+    
     int y1, m1, d1, h1 = 0, min1 = 0;
     int y2, m2, d2, h2 = 0, min2 = 0;
     
@@ -161,8 +161,6 @@ int compare_dates(const char* date1, const char* date2) {
 }
 
 bool is_date_before_now(const char* date) {
-    // Verifica se a data fornecida é anterior à data/hora atual
-    // Suporta: "dd-mm-yyyy" ou "dd-mm-yyyy hh:mm"
     char current_datetime[20];
     get_current_datetime(current_datetime);
     return compare_dates(date, current_datetime) < 0;

@@ -31,14 +31,12 @@ static struct {
     char server_tcp_port[8];
 } client_state = {-1, NULL, "000000", "00000000", false, "localhost", "58001"};
 
-/**
- * Inicializa conexão UDP com o servidor
- */
+
 bool init_udp_connection(const char* server_ip, const char* server_port) {
+    
     struct addrinfo hints;
     int errcode;
     
-    // Guardar IP e porta TCP do servidor (mesma porta que UDP)
     strncpy(client_state.server_ip, server_ip, sizeof(client_state.server_ip) - 1);
     strncpy(client_state.server_tcp_port, server_port, sizeof(client_state.server_tcp_port) - 1);
     
@@ -52,7 +50,7 @@ bool init_udp_connection(const char* server_ip, const char* server_port) {
         return false;
     }
     
-    client_state.udp_socket = socket(AF_INET, SOCK_DGRAM, 0); // UDP socket (fd)
+    client_state.udp_socket = socket(AF_INET, SOCK_DGRAM, 0);
     if (client_state.udp_socket == -1) {
         perror("Error creating UDP socket");
         freeaddrinfo(client_state.server_addr);
@@ -60,6 +58,7 @@ bool init_udp_connection(const char* server_ip, const char* server_port) {
     }
     
     // Configurar timeout de 5 segundos para recvfrom
+    // REVER!!
     struct timeval timeout;
     timeout.tv_sec = 5;
     timeout.tv_usec = 0;
@@ -75,16 +74,14 @@ bool init_udp_connection(const char* server_ip, const char* server_port) {
     return true;
 }
 
-/**
- * Envia mensagem UDP e recebe resposta
- */
+
 bool send_udp_receive_response(const char* message, char* response, size_t response_size) {
     
     ssize_t n;
     struct sockaddr_in server_sockaddr;
     socklen_t addrlen;
     
-    // Enviar mensagem
+    
     n = sendto(client_state.udp_socket, message, strlen(message), 0,
                client_state.server_addr->ai_addr, client_state.server_addr->ai_addrlen);
     
@@ -93,7 +90,7 @@ bool send_udp_receive_response(const char* message, char* response, size_t respo
         return false;
     }
     
-    // Receber resposta
+    
     addrlen = sizeof(server_sockaddr);
     n = recvfrom(client_state.udp_socket, response, response_size - 1, 0,
                  (struct sockaddr*)&server_sockaddr, &addrlen);
@@ -111,11 +108,9 @@ bool send_udp_receive_response(const char* message, char* response, size_t respo
     return true;
 }
 
-/**
- * Estabelece conexão TCP com o servidor
- * Retorna o socket TCP conectado, ou -1 em caso de erro
- */
+
 int tcp_connect_to_server() {
+
     struct addrinfo hints, *tcp_res;
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;
@@ -146,27 +141,24 @@ int tcp_connect_to_server() {
     return tcp_socket;
 }
 
-/**
- * Comando: login UID password
- */
+
 void cmd_login(const char* uid, const char* password) {
     char message[64];
     char response[64];
     
-    // Verificar se já existe outro utilizador logado neste terminal
+    
     if (client_state.is_logged_in) {
         if (strcmp(client_state.logged_uid, uid) != 0) {
             printf("Error: User %s is already logged in. Please logout first.\n", 
                    client_state.logged_uid);
             return;
         } else {
-            // Mesmo utilizador já está logado
+            
             printf("User %s is already logged in\n", uid);
             return;
         }
     }
     
-    // Validar formato antes de enviar
     if (strlen(uid) != 6) {
         printf("Error: UID must be exactly 6 digits\n");
         return;
@@ -180,7 +172,7 @@ void cmd_login(const char* uid, const char* password) {
     // Construir mensagem: "LIN UID password\n"
     snprintf(message, sizeof(message), "%s %s %s\n", CMD_LOGIN, uid, password);
     
-    // Enviar e receber resposta
+    
     if (!send_udp_receive_response(message, response, sizeof(response))) {
         printf("Error: Communication with server failed\n");
         return;
@@ -193,7 +185,6 @@ void cmd_login(const char* uid, const char* password) {
         return;
     }
     
-    // Processar status
     if (strcmp(status, STATUS_OK) == 0) {
         strcpy(client_state.logged_uid, uid);
         strcpy(client_state.logged_password, password);
@@ -219,6 +210,7 @@ void cmd_login(const char* uid, const char* password) {
 }
 
 void cmd_logout() {
+
     char message[64];
     char response[64];
 
@@ -258,7 +250,7 @@ void cmd_logout() {
 }
 
 void cmd_unregister() {
-    // Implementar comando unregister similar a login/logout
+    
     char message[64];
     char response[64];
 
@@ -300,13 +292,13 @@ void cmd_unregister() {
 
 
 void cmd_create_event(const char* name, const char* event_fname, const char* event_date, const char* event_time, int num_attendees) {
-    // Verificar se está logado
+    
     if (!client_state.is_logged_in) {
         printf("Error: You must be logged in to create events\n");
         return;
     }
     
-    // Validar parâmetros
+    
     if (!validate_event_name(name)) {
         printf("Error: Invalid event name (max 10 alphanumeric characters)\n");
         return;
@@ -322,7 +314,7 @@ void cmd_create_event(const char* name, const char* event_fname, const char* eve
         return;
     }
     
-    // Validar que a data/hora não é passada
+    
     char full_datetime[20];
     snprintf(full_datetime, sizeof(full_datetime), "%s %s", event_date, event_time);
     if (is_date_before_now(full_datetime)) {
@@ -336,7 +328,7 @@ void cmd_create_event(const char* name, const char* event_fname, const char* eve
         return;
     }
     
-    // Abrir e ler ficheiro (deve existir na mesma pasta)
+    
     char dir[128];
     snprintf(dir, sizeof(dir), "events/%s", event_fname);
     FILE *file = fopen(dir, "rb");
@@ -357,7 +349,7 @@ void cmd_create_event(const char* name, const char* event_fname, const char* eve
         return;
     }
     
-    // Alocar memória para dados do ficheiro
+    
     unsigned char *filedata = malloc(filesize);
     if (!filedata) {
         printf("Error: Memory allocation failed\n");
@@ -365,7 +357,6 @@ void cmd_create_event(const char* name, const char* event_fname, const char* eve
         return;
     }
     
-    // Ler ficheiro
     size_t bytes_read = fread(filedata, 1, filesize, file);
     fclose(file);
     
@@ -395,9 +386,6 @@ void cmd_create_event(const char* name, const char* event_fname, const char* eve
         return;
     }
     
-    
-    // Construir header SEM espaço extra no final
-    // Formato: "CRE UID password name date time attendance Fname Fsize " + filedata + "\n"
     char header[256];
     int header_len = snprintf(header, sizeof(header),
                               "%s %s %s %s %s %s %d %s %ld ",
@@ -411,7 +399,6 @@ void cmd_create_event(const char* name, const char* event_fname, const char* eve
         return;
     }
     
-    // Alocar buffer para mensagem completa (header + filedata + newline)
     size_t total_size = header_len + filesize + 1;
     char *full_message = malloc(total_size);
     if (!full_message) {
@@ -421,7 +408,6 @@ void cmd_create_event(const char* name, const char* event_fname, const char* eve
         return;
     }
     
-    // Montar mensagem completa
     memcpy(full_message, header, header_len);
     memcpy(full_message + header_len, filedata, filesize);
     full_message[header_len + filesize] = '\n';
@@ -456,7 +442,6 @@ void cmd_create_event(const char* name, const char* event_fname, const char* eve
     
     response[resp_len] = '\0';
     
-    // Parse resposta
     char rsp_code[4], status[4], eid[4];
     int parsed = sscanf(response, "%3s %3s %3s", rsp_code, status, eid);
     
@@ -465,7 +450,7 @@ void cmd_create_event(const char* name, const char* event_fname, const char* eve
         return;
     }
     
-    // Processar status
+    
     if (strcmp(status, STATUS_OK) == 0 && parsed == 3) {
         printf("Event created successfully!\n");
         printf("───────────────────────────────\n");
@@ -486,21 +471,17 @@ void cmd_create_event(const char* name, const char* event_fname, const char* eve
     }
 }
 
-/**
- * Comando: close EID
- * Fecha um evento criado pelo utilizador logado
- */
 void cmd_close_event(const char* eid_str) {
-    // Verificar se está logado
+    
     if (!client_state.is_logged_in) {
         printf("Error: You must be logged in to close events\n");
         return;
     }
     
-    // Converter EID para inteiro
+    
     int eid = atoi(eid_str);
     
-    // Validar EID
+    
     if (eid < 1 || eid > 999) {
         printf("Error: Invalid EID (must be between 1 and 999)\n");
         return;
@@ -525,14 +506,13 @@ void cmd_close_event(const char* eid_str) {
         return;
     }
     
-    // Enviar comando
+    
     ssize_t sent = write(tcp_socket, command, cmd_len);
     if (sent != cmd_len) {
         perror("Error sending command");
         close(tcp_socket);
         return;
     }
-    
     
     // Receber resposta: "RCL status\n"
     char response[64];
@@ -546,7 +526,6 @@ void cmd_close_event(const char* eid_str) {
     
     response[resp_len] = '\0';
     
-    // Parse resposta
     char rsp_code[4], status[4];
     int parsed = sscanf(response, "%3s %3s", rsp_code, status);
     
@@ -585,7 +564,6 @@ void cmd_my_events() {
     char message[64];
     char response[1024];
 
-    // Validar que utilizador está autenticado
     if (!client_state.is_logged_in) {
         printf("Error: User needs to be logged in to view their events\n");
         return;
@@ -594,7 +572,6 @@ void cmd_my_events() {
     // Construir mensagem: "LME UID password\n"
     snprintf(message, sizeof(message), "%s %s %s\n", CMD_MYEVENTS, client_state.logged_uid, client_state.logged_password);
     
-    // Enviar e receber resposta
     if (!send_udp_receive_response(message, response, sizeof(response))) {
         printf("Error: Communication with server failed\n");
         return;
@@ -607,7 +584,6 @@ void cmd_my_events() {
         return;
     }
     
-    // Processar status
     if (strcmp(status, STATUS_OK) == 0) {
         // Parse da lista de eventos
         char *ptr = response + 7;  // Saltar "RME OK "
@@ -644,11 +620,9 @@ void cmd_my_events() {
             
             printf("  %03d    %s\n", eid, status_str);
             
-            // Avançar para próximo par EID state
             while (*ptr && *ptr != ' ') ptr++;
             if (*ptr) ptr++;  // Saltar espaço
             
-            // Procurar próximo espaço (após state)
             while (*ptr && *ptr != ' ' && *ptr != '\n') ptr++;
             if (*ptr == ' ') ptr++;
             
@@ -708,6 +682,7 @@ void cmd_list_events() {
 
 
     while (1) {
+
         iteration++;
 
         ssize_t n = read(tcp_socket, recv_buf, sizeof(recv_buf) - 1);
@@ -806,7 +781,7 @@ void cmd_list_events() {
             }
         }
 
-        /* 3) GUARDAR RESTO NO TAIL */
+        /* 3) GUARDAR RESTO TRUNCADO NO TAIL */
         tail_len = work_len - pos;
         if (tail_len > 0) {
             if (tail_len >= sizeof(tail)) {
@@ -824,11 +799,11 @@ void cmd_list_events() {
 }
 
 void cmd_change_password(const char* old_pass, const char* new_pass) {  
-    // A implementar
+    
     char command[128];
     char response[64];
 
-    //Validar formato das passwords
+    
     if (strlen(old_pass) != PASSWORD_LEN || strlen(new_pass) != PASSWORD_LEN) {
         printf("Error: Passwords must be exactly %d alphanumeric characters\n", PASSWORD_LEN);
         return;
@@ -906,7 +881,6 @@ void cmd_show_event(const char* eid_str) {
         return;
     }
 
-    // Alocar buffer grande no HEAP (não na stack!)
     char *response = malloc(10485760); // 10 MB
     if (!response) {
         printf("Error: Memory allocation failed\n");
@@ -955,7 +929,6 @@ void cmd_show_event(const char* eid_str) {
         
         total_received += n;
         
-        // Verificar se recebemos o '\n' final
         if (response[total_received - 1] == '\n') {
             message_complete = true;
         }
@@ -979,7 +952,6 @@ void cmd_show_event(const char* eid_str) {
         int num_attendees, num_reserved;
         long fsize;
         
-        // Parse dos 8 campos de texto
         int parsed = sscanf(ptr, "%6s %10s %10s %5s %d %d %24s %ld",
                             uid, event_name, event_date, event_time,
                             &num_attendees, &num_reserved, fname, &fsize);
@@ -995,23 +967,21 @@ void cmd_show_event(const char* eid_str) {
         // Saltar os 8 campos que já lemos
         int fields_to_skip = 8;
         while (fields_to_skip > 0 && fdata_ptr < response + total_received) {
-            // Saltar espaços
+            
             while (*fdata_ptr == ' ' && fdata_ptr < response + total_received) {
                 fdata_ptr++;
             }
-            // Saltar o campo
+            
             while (*fdata_ptr != ' ' && fdata_ptr < response + total_received) {
                 fdata_ptr++;
             }
             fields_to_skip--;
         }
         
-        // Agora saltar o último espaço antes do Fdata
         while (*fdata_ptr == ' ' && fdata_ptr < response + total_received) {
             fdata_ptr++;
         }
         
-        // Calcular tamanho real do Fdata recebido
         long fdata_received = (response + total_received) - fdata_ptr;
         if (fdata_received > 0 && response[total_received - 1] == '\n') {
             fdata_received--; // Não contar o \n final
@@ -1024,7 +994,7 @@ void cmd_show_event(const char* eid_str) {
             return;
         }
         
-        // FASE 3: Guardar ficheiro no disco
+        //Guardar ficheiro no disco
         FILE *f = fopen(fname, "wb");
         if (!f) {
             printf("Error: Cannot create file '%s'\n", fname);
@@ -1191,7 +1161,6 @@ void cmd_my_reservations() {
     char message[64];
     char response[1024];
 
-    // Validar que utilizador está autenticado
     if (!client_state.is_logged_in) {
         printf("Error: User needs to be logged in to view their reservations\n");
         return;
@@ -1212,11 +1181,10 @@ void cmd_my_reservations() {
         return;
     }
 
-    // Processar status
     if (strcmp(status, STATUS_OK) == 0) {
 
-        // Parse da lista de reservas
-        char *ptr = response + 7;  // Saltar "RMR OK "
+        
+        char *ptr = response + 7;
         int reservation_count = 0;
 
         printf("  My Reservations\n");
@@ -1226,7 +1194,7 @@ void cmd_my_reservations() {
 
         int eid;
         char date[DATE_STR_LEN + 1];
-        char time[TIME_STR_LEN + 4]; // espaço para formato HH:MM:SS
+        char time[TIME_STR_LEN + 4];
         int num_seats;
 
         while (sscanf(ptr, "%d %10s %8s %d", &eid, date, time, &num_seats) == 4) {
@@ -1292,9 +1260,8 @@ int main(int argc, char *argv[]) {
     char *server_ip = "localhost";
     char *server_port = "58084";
     char input[INPUT_BUFFER_SIZE];
-    char command[32], arg1[32], arg2[32];
+    char command[32], arg1[32], arg2[32], arg3[32], arg4[32], arg5[256];
     
-    // Parse argumentos da linha de comandos
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-n") == 0 && i + 1 < argc) {
             server_ip = argv[++i];
@@ -1323,12 +1290,10 @@ int main(int argc, char *argv[]) {
         
         input[strcspn(input, "\n")] = '\0';
         
-        
-        char arg3[32], arg4[32], arg5[256];
         int parsed = sscanf(input, "%31s %31s %31s %31s %31s %255s", command, arg1, arg2, arg3, arg4, arg5);
         
         if (parsed == 0) {
-            continue; // Linha vazia
+            continue;
         }
         
         // Processar comandos com switch

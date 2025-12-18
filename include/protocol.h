@@ -56,7 +56,6 @@
 #define STATUS_NID "NID"
 
 // Data Structures for Messages
-// (struct addrinfo já está definida em <netdb.h>)
 
 typedef enum {
     CMD_TYPE_UNKNOWN = 0,

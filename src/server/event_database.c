@@ -13,29 +13,26 @@
 
 
 int create_event(Event *ev) {
+
     if (!ev) return -1;
     
-    // PROTEÇÃO CONTRA CONCORRÊNCIA: Lock mutex durante criação de evento
-    pthread_mutex_lock(&event_creation_mutex);
-    
-    // Obter próximo EID disponível
     int eid = get_next_eid();
     if (eid < 0) {
         fprintf(stderr, "[EVENT] No more EIDs available\n");
-        pthread_mutex_unlock(&event_creation_mutex);
+        
         return -1;
     }
     
     ev->eid = eid;
     
-    // Criar directoria do evento
+    
     if (!create_event_directory(eid)) {
         fprintf(stderr, "[EVENT] Failed to create event directory for EID=%03d\n", eid);
-        pthread_mutex_unlock(&event_creation_mutex);
+        
         return -1;
     }
     
-    // Criar ficheiro START_eid.txt
+    
     char start_filename[64];
     snprintf(start_filename, sizeof(start_filename), "EVENTS/%03d/START_%03d.txt", eid, eid);
     
@@ -45,20 +42,19 @@ int create_event(Event *ev) {
         return -1;
     }
     
-    // Escrever: UID name desc_fname total_seats start_date start_time
-    // Nota: o enunciado usa dd-mm-yyyy HH:MM mas vou seguir o protocolo dd-mm-yyyy
+    
     fprintf(fp, "%s %s %s %d %s %s\n",
             ev->uid, ev->name, ev->filename, ev->total_seats, ev->date, ev->time);
     fclose(fp);
     
-    // Criar ficheiro RES_eid.txt com valor 0
+    
     char res_filename[64];
     snprintf(res_filename, sizeof(res_filename), "EVENTS/%03d/RES_%03d.txt", eid, eid);
     
     fp = fopen(res_filename, "w");
     if (!fp) {
         fprintf(stderr, "[EVENT] Failed to create RES file for EID=%03d\n", eid);
-        pthread_mutex_unlock(&event_creation_mutex);
+        
         return -1;
     }
     fprintf(fp, "0\n");
@@ -72,7 +68,7 @@ int create_event(Event *ev) {
         fp = fopen(desc_path, "wb");
         if (!fp) {
             fprintf(stderr, "[EVENT] Failed to save description file for EID=%03d\n", eid);
-            pthread_mutex_unlock(&event_creation_mutex);
+            
             return -1;
         }
         
@@ -90,16 +86,13 @@ int create_event(Event *ev) {
         fclose(fp);
     }
     
-    // LIBERAR MUTEX: Criação do evento concluída
-    pthread_mutex_unlock(&event_creation_mutex);
+    
     
     printf("[EVENT] Created event EID=%03d by UID=%s\n", eid, ev->uid);
     return 0;
 }
 
-/**
- * Lê informação de um evento
- */
+
 int get_event(int eid, Event *ev) {
     if (!ev || eid < 1 || eid > 999) return -1;
     
@@ -111,7 +104,6 @@ int get_event(int eid, Event *ev) {
         return -1;
     }
     
-    // Ler ficheiro START
     char start_filename[64];
     snprintf(start_filename, sizeof(start_filename), "EVENTS/%03d/START_%03d.txt", eid, eid);
     
@@ -127,7 +119,6 @@ int get_event(int eid, Event *ev) {
     }
     fclose(fp);
     
-    // Ler número de reservas de RES
     char res_filename[64];
     snprintf(res_filename, sizeof(res_filename), "EVENTS/%03d/RES_%03d.txt", eid, eid);
     
@@ -172,7 +163,6 @@ int get_event(int eid, Event *ev) {
         return -1;
     }
     
-    // Alocar e ler dados
     ev->filedata = malloc(ev->file_size);
     if (!ev->filedata) {
         fclose(fp);
@@ -193,9 +183,7 @@ int get_event(int eid, Event *ev) {
     return 0;
 }
 
-/**
- * Verifica se utilizador é dono do evento
- */
+
 int is_event_owner(const char *uid, int eid) {
     if (!uid || eid < 1 || eid > 999) return 0;
     
@@ -208,15 +196,10 @@ int is_event_owner(const char *uid, int eid) {
 }
 
 
-
-/**
- * Obtém o estado de um evento
- * Retorna: 0=passado, 1=ativo, 2=sold-out, 3=fechado, -1=erro
- */
 int get_event_state(int eid) {
+
     if (!event_exists(eid)) return -1;
     
-    // Verificar se tem ficheiro END (foi fechado manualmente)
     char end_filename[64];
     snprintf(end_filename, sizeof(end_filename), "EVENTS/%03d/END_%03d.txt", eid, eid);
     struct stat st;
@@ -224,7 +207,6 @@ int get_event_state(int eid) {
         return 3; // Fechado
     }
     
-    // Ler data do evento
     char start_file[128];
     snprintf(start_file, sizeof(start_file), "EVENTS/%03d/START_%03d.txt", eid, eid);
     
@@ -240,11 +222,10 @@ int get_event_state(int eid) {
     }
     fclose(fp);
     
-    // Adicionar hora à data para comparação: "dd-mm-yyyy HH:MM"
     char full_date[32];
     snprintf(full_date, sizeof(full_date), "%s %s", date, event_time_str);
     
-    // Verificar se data já passou
+    
     time_t event_timestamp = date_to_timestamp(full_date);
     time_t now_timestamp = time(NULL);
     
@@ -252,13 +233,11 @@ int get_event_state(int eid) {
         return 0; // Passado
     }
     
-    // Ler total de reservas
     int total, reserved;
     if (!get_event_seats(eid, &total, &reserved)) {
         return -1;
     }
     
-    // Verificar se está sold-out
     if (reserved >= total) {
         return 2; // Sold-out
     }
@@ -278,10 +257,10 @@ int auto_close_if_past(int eid) {
     snprintf(end_filename, sizeof(end_filename), "EVENTS/%03d/END_%03d.txt", eid, eid);
     struct stat st;
     if (stat(end_filename, &st) == 0) {
-        return 0; // Já está fechado
+        return 0;
     }
     
-    // Ler data do evento
+    
     char start_file[128];
     snprintf(start_file, sizeof(start_file), "EVENTS/%03d/START_%03d.txt", eid, eid);
     
@@ -297,7 +276,7 @@ int auto_close_if_past(int eid) {
     }
     fclose(fp);
     
-    // Verificar se data já passou usando a função utilitária (inclui hora)
+    
     char full_datetime[20];
     snprintf(full_datetime, sizeof(full_datetime), "%s %s", date, event_time_str);
     
@@ -322,25 +301,17 @@ int auto_close_if_past(int eid) {
 }
 
 
-/**
- * Fecha um evento
- * Cria ficheiro END_eid.txt com timestamp
- * Retorna: 0=OK, -1=não existe, -2=já fechado, -3=não é dono, 1=PST, 2=SLD
- */
 int close_event(const char *uid, int eid) {
     if (!uid || eid < 1 || eid > 999) return -1;
     
-    // Verificar se evento existe
     if (!event_exists(eid)) {
         return -1; // NOE
     }
     
-    // Verificar ownership
     if (!is_event_owner(uid, eid)) {
         return -3; // EOW
     }
     
-    // Verificar estado atual
     int state = get_event_state(eid);
     
     if (state == 3) {
@@ -355,7 +326,6 @@ int close_event(const char *uid, int eid) {
         return 2; // SLD - sold-out
     }
     
-    // Pode fechar - criar ficheiro END
     char end_filename[64];
     snprintf(end_filename, sizeof(end_filename), "EVENTS/%03d/END_%03d.txt", eid, eid);
     
@@ -372,15 +342,12 @@ int close_event(const char *uid, int eid) {
     fclose(fp);
     
     printf("[EVENT] Closed event EID=%03d by UID=%s at %s\n", eid, uid, timestamp);
-    return 0; // OK
+    return 0; 
 }
 
-/**
- * Lê total de lugares e lugares reservados de um evento
- * Retorna: 1=sucesso, 0=erro
- */
+
 int get_event_seats(int eid, int *total_seats, int *reserved_seats) {
-    // Ler total_seats de START_eid.txt
+    
     char start_file[128];
     snprintf(start_file, sizeof(start_file), "EVENTS/%03d/START_%03d.txt", eid, eid);
     
@@ -395,13 +362,12 @@ int get_event_seats(int eid, int *total_seats, int *reserved_seats) {
     
     if (fields < 6) return 0;
     
-    // Ler reserved_seats de RES_eid.txt
     char res_file[128];
     snprintf(res_file, sizeof(res_file), "EVENTS/%03d/RES_%03d.txt", eid, eid);
     
     fp = fopen(res_file, "r");
     if (!fp) {
-        *reserved_seats = 0;  // Ficheiro não existe = 0 reservas
+        *reserved_seats = 0;
         return 1;
     }
     
@@ -417,8 +383,7 @@ int get_event_seats(int eid, int *total_seats, int *reserved_seats) {
 
 int create_reservation(int eid, const char *uid, int num_seats) {
 
-    // PROTEÇÃO CONTRA CONCORRÊNCIA: Lock mutex durante reserva
-    pthread_mutex_lock(&reservation_mutex);
+    
 
     time_t now = time(NULL);
     struct tm *tm_info = localtime(&now);
@@ -434,11 +399,9 @@ int create_reservation(int eid, const char *uid, int num_seats) {
     char display_timestamp[32];
     strftime(display_timestamp, sizeof(display_timestamp), "%d-%m-%Y %H:%M:%S", tm_info);
     
-    // Formato: UID num_seats timestamp (para EVENTS)
     char event_content[128];
     snprintf(event_content, sizeof(event_content), "%s %d %s\n", uid, num_seats, display_timestamp);
     
-    // Formato: EID num_seats timestamp (para USERS - inclui EID)
     char user_content[128];
     snprintf(user_content, sizeof(user_content), "%d %d %s\n", eid, num_seats, display_timestamp);
     
@@ -448,8 +411,7 @@ int create_reservation(int eid, const char *uid, int num_seats) {
     FILE *fp = fopen(event_path, "w");
     if (!fp) {
         printf(" !fp\n");
-        pthread_mutex_unlock(&reservation_mutex);
-        return 0;
+              return 0;
     }
     
     fprintf(fp, "%s", event_content);
@@ -477,16 +439,13 @@ int create_reservation(int eid, const char *uid, int num_seats) {
     fp = fopen(res_file, "w");
     if (!fp) {
         printf("!fp\n");
-        pthread_mutex_unlock(&reservation_mutex);
-        return 0;
+              return 0;
     }
     
     fprintf(fp, "%d\n", current_reserved + num_seats);
     fclose(fp);
     
-    // LIBERAR MUTEX: Reserva concluída
-    pthread_mutex_unlock(&reservation_mutex);
-    
+      
     printf("[DB] Created reservation:  ( UID = %s, EID=%03d, seats=%d)\n", uid, eid, num_seats);
     return 1;
 }

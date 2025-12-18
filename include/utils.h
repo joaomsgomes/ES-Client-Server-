@@ -27,4 +27,4 @@ int compare_dates(const char* date1, const char* date2);
 bool is_date_before_now(const char* date);
 
 
-#endif // UTILS_H
+#endif

@@ -21,10 +21,6 @@
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 
-// Mutexes globais para proteção contra concorrência
-pthread_mutex_t event_creation_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t user_auth_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t reservation_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 int main(void) {
 
@@ -115,22 +111,21 @@ int main(void) {
     
     printf("ES Server: TCP listening on port %s\n", MYPORT);
 
-    FD_ZERO(&inputs); // Clear input mask
+    FD_ZERO(&inputs);
     FD_SET(0, &inputs); // Set standard input channel on
     FD_SET(ufd, &inputs); // Set UDP channel on
     FD_SET(tfd, &inputs); // Set TCP channel on
 
-    max_fd = tfd; // REVER --> Pode prejudicar o funcionamento do TCP Channel
+    max_fd = tfd;
 
     while(1)
     {
         testfds = inputs;
-    //        printf("testfds byte: %d\n",((char *)&testfds)[0]); // Debug
+    
         memset((void *)&timeout,0,sizeof(timeout));
         timeout.tv_sec=10;
 
         out_fds=select(max_fd+1,&testfds,(fd_set *)NULL,(fd_set *)NULL,(struct timeval *) &timeout);
-        // testfds is now '1' at the positions that were activated by FD_SET
 
         switch(out_fds)
         {
@@ -218,8 +213,7 @@ int main(void) {
                             bytes_read = read(client_fd, tcp_buffer, MAX_FILE_SIZE + 1024);
                             if (bytes_read > 0) {
                                 total_read = bytes_read;
-                                // REVER!!!!
-                                // Se for CREATE, precisamos ler mais dados (filedata pode vir em pacotes separados)
+                                // Filedata pode vir em pacotes separados
                                 if (bytes_read >= 3 && strncmp(tcp_buffer, CMD_CREATE, 3) == 0) {
                                     struct timeval tv;
                                     tv.tv_sec = 1;  // timeout de 1 segundo
@@ -235,7 +229,7 @@ int main(void) {
                                 }
                                 
                                 tcp_buffer[total_read] = '\0'; 
-                                printf("[TCP] Received %zd bytes (total)\n", total_read);
+                                //printf("[TCP] Received %zd bytes (total)\n", total_read);
                                 bytes_read = total_read;
                                 
                                 // Identificar comando (primeiros 3 caracteres)

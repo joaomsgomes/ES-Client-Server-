@@ -180,14 +180,15 @@ test_9to12:
 	echo "✅ Scripts 9-12 COMPLETOS"
 
 # Testa scripts 21-29 (testes adicionais)
-test_21to29:
+test_21to24:
 	@echo "===========================================" ;
-	@echo "  Scripts 21-29: Testes Adicionais        " ;
+	@echo "  Scripts 21-24: Testes Adicionais        " ;
 	@echo "===========================================" ;
+	@$(MAKE) cleandb ;
 	@set -u; \
 	mkdir -p "$(TEST_DIR)"; \
-	echo "▶ Executando scripts 21 a 29..."; \
-	for s in 21 22 23 24 25 26 27 28 29; do \
+	echo "▶ Executando scripts 21 a 24..."; \
+	for s in 21 22 23 24; do \
 		echo "▶ Running script $$s ..."; \
 		if printf "$(TARGET_IP) $(TARGET_PORT) $$s\n" | nc "$(TEJO_HOST)" "$(TEJO_PORT)" > "$(REPORT)" 2>&1; then \
 			cp -f "$(REPORT)" "$(TEST_DIR)/report_$$s.html" 2>/dev/null || true; \
@@ -201,7 +202,32 @@ test_21to29:
 		fi; \
 		echo ""; \
 	done; \
-	echo "✅ Scripts 21-29 COMPLETOS"
+	echo "✅ Scripts 21-24 COMPLETOS"
+
+test_25to29:
+	@echo "===========================================" ;
+	@echo "  Scripts 25-29: Testes Adicionais        " ;
+	@echo "===========================================" ;
+	@$(MAKE) cleandb ;
+	@set -u; \
+	mkdir -p "$(TEST_DIR)"; \
+	echo "▶ Executando scripts 25 a 29..."; \
+	for s in 25 26 27 28 29; do \
+		echo "▶ Running script $$s ..."; \
+		if printf "$(TARGET_IP) $(TARGET_PORT) $$s\n" | nc "$(TEJO_HOST)" "$(TEJO_PORT)" > "$(REPORT)" 2>&1; then \
+			cp -f "$(REPORT)" "$(TEST_DIR)/report_$$s.html" 2>/dev/null || true; \
+			if grep -Eqi '(FAIL|ERROR)' "$(REPORT)"; then \
+				echo "✗ FAIL on script $$s"; \
+			else \
+				echo "✓ PASS script $$s"; \
+			fi; \
+		else \
+			echo "✗ ERROR: nc failed on script $$s"; \
+		fi; \
+		echo ""; \
+	done; \
+	echo "✅ Scripts 25-29 COMPLETOS"
+
 
 # Executa TODAS as sequências na ordem correta com limpezas automáticas
 test_all:
@@ -215,7 +241,9 @@ test_all:
 	@echo "" ;
 	@$(MAKE) test_9to12 TARGET_IP=$(TARGET_IP) TARGET_PORT=$(TARGET_PORT) ;
 	@echo "" ;
-	@$(MAKE) test_21to29 TARGET_IP=$(TARGET_IP) TARGET_PORT=$(TARGET_PORT) ;
+	@$(MAKE) test_21to24 TARGET_IP=$(TARGET_IP) TARGET_PORT=$(TARGET_PORT) ;
+	@echo "" ;
+	@$(MAKE) test_25to29 TARGET_IP=$(TARGET_IP) TARGET_PORT=$(TARGET_PORT) ;
 	@echo "" ;
 	@echo "=========================================" ;
 	@echo "✅ TODOS OS TESTES COMPLETADOS           " ;

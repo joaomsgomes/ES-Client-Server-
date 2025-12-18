@@ -9,14 +9,11 @@
 #include "../../include/es_server.h"
 #include "../../include/utils.h"
 
-/**
- * Inicializa o sistema de ficheiros do servidor
- * Cria as directorias USERS/ e EVENTS/ se não existirem
- */
+
 void init_file_system() {
-    // Criar directoria USERS
+    
     if (mkdir("USERS", 0700) == -1) {
-        // Já existe ou erro
+        
         struct stat st;
         if (stat("USERS", &st) == 0 && S_ISDIR(st.st_mode)) {
             printf("[INIT] Directory USERS/ already exists\n");
@@ -28,7 +25,7 @@ void init_file_system() {
         printf("[INIT] Created directory USERS/\n");
     }
     
-    // Criar directoria EVENTS
+    
     if (mkdir("EVENTS", 0700) == -1) {
         struct stat st;
         if (stat("EVENTS", &st) == 0 && S_ISDIR(st.st_mode)) {
@@ -43,12 +40,7 @@ void init_file_system() {
     
 }
 
-/**
- * Cria a directoria de um utilizador e subdirectorias
- * USERS/uid/
- * USERS/uid/CREATED/
- * USERS/uid/RESERVED/
- */
+
 int create_user_directory(const char *uid) {
     char dirname[64];
     
@@ -73,12 +65,7 @@ int create_user_directory(const char *uid) {
     return 1;
 }
 
-/**
- * Cria a directoria de um evento e subdirectorias
- * EVENTS/eid/
- * EVENTS/eid/DESCRIPTION/
- * EVENTS/eid/RESERVATIONS/
- */
+
 int create_event_directory(int eid) {
     char eid_dirname[32];
     char reserv_dirname[64];
@@ -89,14 +76,12 @@ int create_event_directory(int eid) {
         return 0;
     }
     
-    // Criar EVENTS/eid/
     snprintf(eid_dirname, sizeof(eid_dirname), "EVENTS/%03d", eid);
     ret = mkdir(eid_dirname, 0700);
     if (ret == -1) {
         return 0;
     }
     
-    // Criar EVENTS/eid/RESERVATIONS/
     snprintf(reserv_dirname, sizeof(reserv_dirname), "EVENTS/%03d/RESERVATIONS", eid);
     ret = mkdir(reserv_dirname, 0700);
     if (ret == -1) {
@@ -104,7 +89,6 @@ int create_event_directory(int eid) {
         return 0;
     }
     
-    // Criar EVENTS/eid/DESCRIPTION/
     snprintf(desc_dirname, sizeof(desc_dirname), "EVENTS/%03d/DESCRIPTION", eid);
     ret = mkdir(desc_dirname, 0700);
     if (ret == -1) {
@@ -116,9 +100,7 @@ int create_event_directory(int eid) {
     return 1;
 }
 
-/**
- * Cria ficheiro de login (uid_login.txt)
- */
+
 int create_login_file(const char *uid) {
     char login_name[64];
     FILE *fp;
@@ -138,9 +120,7 @@ int create_login_file(const char *uid) {
     return 1;
 }
 
-/**
- * Remove ficheiro de login
- */
+
 int erase_login_file(const char *uid) {
     char login_name[64];
     
@@ -153,9 +133,6 @@ int erase_login_file(const char *uid) {
     return 1;
 }
 
-/**
- * Verifica se utilizador está logged in
- */
 int is_logged_in(const char *uid) {
     char login_name[64];
     struct stat st;
@@ -164,9 +141,7 @@ int is_logged_in(const char *uid) {
     return (stat(login_name, &st) == 0);
 }
 
-/**
- * Cria/atualiza ficheiro de password
- */
+
 int write_password_file(const char *uid, const char *password) {
     char pass_name[64];
     FILE *fp;
@@ -186,9 +161,7 @@ int write_password_file(const char *uid, const char *password) {
     return 1;
 }
 
-/**
- * Lê password do ficheiro
- */
+
 int read_password_file(const char *uid, char *password) {
     char pass_name[64];
     FILE *fp;
@@ -212,9 +185,7 @@ int read_password_file(const char *uid, char *password) {
     return 1;
 }
 
-/**
- * Remove ficheiro de password
- */
+
 int erase_password_file(const char *uid) {
     char pass_name[64];
     
@@ -227,10 +198,7 @@ int erase_password_file(const char *uid) {
     return 1;
 }
 
-/**
- * Obtem próximo EID disponível
- * Procura em EVENTS/ qual o maior número de directoria
- */
+
 int get_next_eid() {
     struct dirent **filelist;
     int nentries, ient = 0;
@@ -239,7 +207,7 @@ int get_next_eid() {
     nentries = scandir("EVENTS", &filelist, 0, alphasort);
     
     if (nentries <= 0) {
-        return 1; // Primeiro evento
+        return 1; 
     }
     
     while (ient < nentries) {
@@ -255,15 +223,13 @@ int get_next_eid() {
     free(filelist);
     
     if (max_eid >= 999) {
-        return -1; // Base de dados cheia
+        return -1;
     }
     
     return max_eid + 1;
 }
 
-/**
- * Verifica se um evento existe
- */
+
 int event_exists(int eid) {
     char dirname[32];
     struct stat st;
@@ -272,9 +238,7 @@ int event_exists(int eid) {
     return (stat(dirname, &st) == 0 && S_ISDIR(st.st_mode));
 }
 
-/**
- * Verifica se utilizador existe (tem directoria)
- */
+
 int user_exists(const char *uid) {
     char dirname[32];
     struct stat st;
@@ -283,10 +247,7 @@ int user_exists(const char *uid) {
     return (stat(dirname, &st) == 0 && S_ISDIR(st.st_mode));
 }
 
-/**
- * Converte data dd-mm-yyyy HH:MM para Unix timestamp
- * Retorna -1 em caso de erro
- */
+
 time_t date_to_timestamp(const char *date_str) {
     struct tm datetime;
     int day, month, year, hour, min;
@@ -307,9 +268,7 @@ time_t date_to_timestamp(const char *date_str) {
     return mktime(&datetime);
 }
 
-/**
- * Obtem timestamp atual formatado como DD-MM-YYYY HH:MM:SS
- */
+
 void get_current_timestamp(char *buffer, size_t size) {
     time_t fulltime;
     struct tm *current_time;

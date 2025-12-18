@@ -4,10 +4,6 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 
-/**
- * UDP Protocol Handlers
- * Process UDP commands received by the server
- */
 
 // Login handler
 void handle_login(int sockfd, char* message, struct sockaddr_in* client_addr, socklen_t addrlen);
@@ -24,4 +20,4 @@ void handle_my_events(int sockfd, char* message, struct sockaddr_in* client_addr
 // My reservations handler
 void handle_my_reservations(int sockfd, char* message, struct sockaddr_in* client_addr, socklen_t addrlen);
 
-#endif // UDP_HANDLERS_H
+#endif

@@ -130,10 +130,7 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
         return;
     }
     
-    // NOTA: Validação de data passada DESATIVADA para permitir eventos históricos nos testes
-    // Conforme especificação: "desactiva temporariamente a validação da data de ocorrência"
-    // O estado (past/active/sold-out/closed) é calculado dinamicamente em get_event_state()
-    /*
+    
     char full_datetime[20];
     snprintf(full_datetime, sizeof(full_datetime), "%s %s", date, time);
     if (is_date_before_now(full_datetime)) {
@@ -142,7 +139,7 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
         printf("[TCP] CREATE: Event date cannot be in the past\n");
         return;
     }
-    */
+    
     
     if (attendance < 10 || attendance > 999) {
         snprintf(response, sizeof(response), "%s %s\n", RSP_CREATE, STATUS_ERR);
@@ -158,11 +155,11 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
         return;
     }
     
-    // Autenticar utilizador
+    
     int auth_result = authenticate_user(uid, password);
     
     if (auth_result == 0) {
-        // Utilizador não existe
+        
         snprintf(response, sizeof(response), "%s %s\n", RSP_CREATE, STATUS_NLG);
         write(client_fd, response, strlen(response));
         printf("[TCP] CREATE: User not found (UID=%s)\n", uid);
@@ -177,33 +174,21 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
         return;
     }
     
-    // Encontrar posição do Fdata no buffer
-    // O formato é: "CRE UID password name date time attendance Fname Fsize "
-    // Depois disso vem o Fdata (dados binários)
-    
     char *filedata_ptr = buffer;
     int header_fields = 0;
-    
-    //printf("[TCP] CREATE: Looking for file data start position...\n");
     
     // Avançar pelos primeiros 9 campos (CRE, UID, password, name, date, time, attendance, Fname, Fsize)
     while (header_fields < 9 && filedata_ptr < buffer + n) {
         if (*filedata_ptr == ' ') {
             header_fields++;
-            //printf("[TCP] CREATE: Found field %d at position %ld\n", header_fields, filedata_ptr - buffer);
         }
         filedata_ptr++;
     }
     
     long header_size = filedata_ptr - buffer;
     long remaining_bytes = n - header_size;
-    
-    //printf("[TCP] CREATE: Header size=%ld bytes, remaining=%ld bytes, expected file=%ld bytes\n", 
-    //       header_size, remaining_bytes, filesize);
-    
-    // Verificar se temos dados suficientes
+        
     if (remaining_bytes < filesize) {
-        // Faltam dados - precisamos ler mais do socket
         snprintf(response, sizeof(response), "%s %s\n", RSP_CREATE, STATUS_ERR);
         write(client_fd, response, strlen(response));
         printf("[TCP] CREATE: Incomplete file data (expected=%ld, got=%ld)\n", 
@@ -211,7 +196,6 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
         return;
     }
     
-    // Alocar memória para filedata
     unsigned char *filedata = malloc(filesize);
     if (!filedata) {
         snprintf(response, sizeof(response), "%s %s\n", RSP_CREATE, STATUS_NOK);
@@ -259,8 +243,7 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
         printf("[TCP] CREATE: Failed to create event\n");
         return;
     }
-    
-    // Sucesso! Retornar EID gerado
+
     snprintf(response, sizeof(response), "%s %s %03d\n", RSP_CREATE, STATUS_OK, ev.eid);
     write(client_fd, response, strlen(response));
     
@@ -338,7 +321,6 @@ void handle_close_event(int client_fd, char* buffer, ssize_t n) {
     printf("[TCP] CLOSE: EID=%03d, UID=%s, status=%s\n", eid, uid, status);
 }
 
-// DELETE DEBUG PRINTS AFTER IMPLEMENTING RESERVE !!
 
 void handle_list_events(int client_fd, char* buffer, ssize_t bytes_read) {
     (void)bytes_read;
@@ -346,7 +328,7 @@ void handle_list_events(int client_fd, char* buffer, ssize_t bytes_read) {
     printf("[TCP] LIST: Received buffer: '%s' (%zd bytes)\n", buffer, bytes_read);
     
     char cmd[4];
-    char response[8192];  // Buffer grande para múltiplos eventos
+    char response[8192];
     
     // Parse: "LST\n"
     int parsed = sscanf(buffer, "%3s", cmd);
@@ -364,7 +346,6 @@ void handle_list_events(int client_fd, char* buffer, ssize_t bytes_read) {
     int n = scandir("EVENTS", &entries, NULL, alphasort);
     
     if (n < 0) {
-        // Pasta não existe ou erro ao ler
         snprintf(response, sizeof(response), "%s %s\n", RSP_LIST, STATUS_NOK);
         write(client_fd, response, strlen(response));
         printf("[TCP] LIST: No events directory found\n");
@@ -375,7 +356,6 @@ void handle_list_events(int client_fd, char* buffer, ssize_t bytes_read) {
     int offset = snprintf(response, sizeof(response), "%s %s", RSP_LIST, STATUS_OK);
     int event_count = 0;
     
-    // Percorrer todos os eventos na pasta EVENTS
     for (int i = 0; i < n; i++) {
         // Ignorar "." e ".."
         if (strcmp(entries[i]->d_name, ".") == 0 || 
@@ -384,11 +364,9 @@ void handle_list_events(int client_fd, char* buffer, ssize_t bytes_read) {
             continue;
         }
         
-        // Extrair EID do nome da pasta (formato: "001", "002", etc)
         int eid = atoi(entries[i]->d_name);
         
         if (eid >= 1 && eid <= 999) {
-            // Ler informações do evento do ficheiro START_eid.txt
             char start_file[128];
             snprintf(start_file, sizeof(start_file), "EVENTS/%03d/START_%03d.txt", eid, eid);
             
@@ -413,18 +391,13 @@ void handle_list_events(int client_fd, char* buffer, ssize_t bytes_read) {
             
             if (fields != 6) {
                 free(entries[i]);
-                continue;  // Formato inválido, ignorar
+                continue;
             }
             
-            // Auto-fechar se o evento já passou
-            // TODO: ATIVAR DEPOIS DE TESTES
-            //auto_close_if_past(eid); 
+            auto_close_if_past(eid); 
             
-            // Obter estado do evento
             int state = get_event_state(eid);
             
-            // Adicionar à resposta: " EID name state event_date"
-            // Formato completo da data: "dd-mm-yyyy hh:mm"
             offset += snprintf(response + offset, sizeof(response) - offset, 
                              " %03d %s %d %s %s", 
                              eid, event_name, state, event_date, event_time);
@@ -438,7 +411,6 @@ void handle_list_events(int client_fd, char* buffer, ssize_t bytes_read) {
     }
     free(entries);
     
-    // Se não encontrou nenhum evento válido
     if (event_count == 0) {
         snprintf(response, sizeof(response), "%s %s\n", RSP_LIST, STATUS_NOK);
         write(client_fd, response, strlen(response));
@@ -446,16 +418,10 @@ void handle_list_events(int client_fd, char* buffer, ssize_t bytes_read) {
         return;
     }
     
-    // Adicionar newline final
     offset += snprintf(response + offset, sizeof(response) - offset, "\n");
     
-    // DEBUG: Mostrar resposta completa
-    printf("[TCP] LIST: Full response (%d bytes): '%s'\n", offset, response);
-    
-    // Enviar resposta
     write(client_fd, response, strlen(response));
     
-    printf("[TCP] LIST: Sent %d event(s)\n", event_count);
 }
 
 void handle_reserve_seats(int client_fd, char* buffer, ssize_t bytes_read) {
@@ -624,7 +590,6 @@ void handle_show_event(int client_fd, char* buffer, ssize_t bytes_read) {
         return;
     }
 
-    // Ler informações do evento do ficheiro START_eid.txt
     // Auto-fechar se o evento já passou
     auto_close_if_past(eid);
     
@@ -636,7 +601,6 @@ void handle_show_event(int client_fd, char* buffer, ssize_t bytes_read) {
         return;
     }
 
-    // Verificar se filedata é válido
     if (ev.filedata == NULL) {
         snprintf(response, sizeof(response), "%s %s\n", RSP_SHOW, STATUS_NOK);
         write(client_fd, response, strlen(response));
@@ -644,7 +608,6 @@ void handle_show_event(int client_fd, char* buffer, ssize_t bytes_read) {
         return;
     }
 
-    // Construir header (só texto)
     // RSE OK UID name date time attendance reserved Fname Fsize
     char header[512];
     int header_len = snprintf(header, sizeof(header),
@@ -687,7 +650,6 @@ void handle_show_event(int client_fd, char* buffer, ssize_t bytes_read) {
     }
 
     free(full_message);
-    printf("[TCP] SHOW: Event %03d sent successfully (%ld bytes)\n", eid, ev.file_size);
 
 }
 

@@ -162,7 +162,7 @@ int compare_dates(const char* date1, const char* date2) {
 
 
 // Comparador para ordenar reservas (mais recente primeiro)
-static int compare_reservations_desc(const void *a, const void *b) {
+int compare_reservations_desc(const void *a, const void *b) {
     const Reservation *r1 = (const Reservation *)a;
     const Reservation *r2 = (const Reservation *)b;
     return -compare_dates(r1->datetime, r2->datetime);  // Negativo = ordem decrescente

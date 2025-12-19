@@ -26,6 +26,7 @@ bool validate_datetime(const char* date, const char* time);
 void get_current_datetime(char* buffer);
 int compare_dates(const char* date1, const char* date2);
 bool is_date_before_now(const char* date);
+int compare_reservations_desc(const void *a, const void *b);
 
 
 #endif

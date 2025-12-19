@@ -15,8 +15,8 @@ void handle_change_password(int client_fd, char* buffer, ssize_t n) {
 
     (void)n; // Unused parameter
 
-    char cmd[4], uid[UID_LEN + 1], old_password[PASSWORD_LEN + 1], new_password[PASSWORD_LEN + 1];
-    char response[64];
+    char cmd[CMD_LEN], uid[UID_LEN + 1], old_password[PASSWORD_LEN + 1], new_password[PASSWORD_LEN + 1];
+    char response[RESPONSE_BUFFER];
 
     int parsed = sscanf(buffer, "%3s %6s %8s %8s", cmd, uid, old_password, new_password);
 
@@ -75,12 +75,12 @@ void handle_change_password(int client_fd, char* buffer, ssize_t n) {
 }
 
 void handle_create_event(int client_fd, char* buffer, ssize_t n) {
-    char cmd[4], uid[UID_LEN + 1], password[PASSWORD_LEN + 1];
+    char cmd[CMD_LEN], uid[UID_LEN + 1], password[PASSWORD_LEN + 1];
     char name[EVENT_NAME_LEN + 1], date[DATE_STR_LEN + 1], time[TIME_STR_LEN + 1];
     char filename[FILENAME_LEN + 1];
     int attendance;
     long filesize;
-    char response[64];
+    char response[RESPONSE_BUFFER];
     
     //printf("[TCP] CREATE: Received %zd bytes total\n", n);
     //printf("[TCP] CREATE: Buffer content (first 100 bytes): '%.*s'\n", (int)(n > 100 ? 100 : n), buffer);
@@ -131,7 +131,7 @@ void handle_create_event(int client_fd, char* buffer, ssize_t n) {
     }
     
     
-    char full_datetime[20];
+    char full_datetime[DATETIME_BUFFER_LEN];
     snprintf(full_datetime, sizeof(full_datetime), "%s %s", date, time);
     if (is_date_before_now(full_datetime)) {
         snprintf(response, sizeof(response), "%s %s\n", RSP_CREATE, STATUS_ERR);
@@ -263,9 +263,9 @@ void handle_close_event(int client_fd, char* buffer, ssize_t n) {
 
     (void)n;
     
-    char cmd[4], uid[UID_LEN + 1], password[PASSWORD_LEN + 1];
+    char cmd[CMD_LEN], uid[UID_LEN + 1], password[PASSWORD_LEN + 1];
     int eid;
-    char response[64];
+    char response[RESPONSE_BUFFER];
     
     int parsed = sscanf(buffer, "%3s %6s %8s %d", cmd, uid, password, &eid);
     
@@ -327,8 +327,8 @@ void handle_list_events(int client_fd, char* buffer, ssize_t bytes_read) {
     
     printf("[TCP] LIST: Received buffer: '%s' (%zd bytes)\n", buffer, bytes_read);
     
-    char cmd[4];
-    char response[8192];
+    char cmd[CMD_LEN];
+    char response[XLARGE_BUFFER];
     
     // Parse: "LST\n"
     int parsed = sscanf(buffer, "%3s", cmd);
@@ -367,8 +367,8 @@ void handle_list_events(int client_fd, char* buffer, ssize_t bytes_read) {
         int eid = atoi(entries[i]->d_name);
         
         if (eid >= 1 && eid <= 999) {
-            char start_file[128];
-            snprintf(start_file, sizeof(start_file), "EVENTS/%03d/START_%03d.txt", eid, eid);
+            char start_file[PATH_BUFFER];
+            snprintf(start_file, sizeof(start_file), "%s%03d/START_%03d.txt", EVENTS_DIR, eid, eid);
             
             FILE *fp = fopen(start_file, "r");
             if (!fp) {
@@ -382,7 +382,7 @@ void handle_list_events(int client_fd, char* buffer, ssize_t bytes_read) {
             char desc_fname[FILENAME_LEN + 1];
             int total_seats;
             char event_date[DATE_STR_LEN + 1];
-            char event_time[6];  // hh:mm
+            char event_time[TIME_BUFFER_LEN];  // hh:mm
             
             int fields = fscanf(fp, "%6s %10s %24s %d %10s %5s",
                                event_uid, event_name, desc_fname, 
@@ -429,9 +429,9 @@ void handle_reserve_seats(int client_fd, char* buffer, ssize_t bytes_read) {
 
     (void)bytes_read;
     
-    char cmd[4], uid[UID_LEN + 1], password[PASSWORD_LEN + 1], eid_str[4];
+    char cmd[CMD_LEN], uid[UID_LEN + 1], password[PASSWORD_LEN + 1], eid_str[EID_STR_LEN];
     int people, eid;
-    char response[64];
+    char response[RESPONSE_BUFFER];
 
     
     int parsed = sscanf(buffer, "%3s %6s %8s %3s %d", 
@@ -569,9 +569,9 @@ void handle_reserve_seats(int client_fd, char* buffer, ssize_t bytes_read) {
 void handle_show_event(int client_fd, char* buffer, ssize_t bytes_read) {
     (void)bytes_read;
 
-    char cmd[4];
+    char cmd[CMD_LEN];
     int eid;
-    char response[128];
+    char response[PATH_BUFFER];
     
     // Parse: "SED EID\n"
     int parsed = sscanf(buffer, "%3s %d", cmd, &eid);
@@ -609,7 +609,7 @@ void handle_show_event(int client_fd, char* buffer, ssize_t bytes_read) {
     }
 
     // RSE OK UID name date time attendance reserved Fname Fsize
-    char header[512];
+    char header[FILE_PATH_BUFFER];
     int header_len = snprintf(header, sizeof(header),
                               "%s %s %s %s %s %s %d %d %s %ld ",
                               RSP_SHOW, STATUS_OK,

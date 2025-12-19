@@ -18,10 +18,10 @@
 static struct {
     int udp_socket;
     struct addrinfo *server_addr;
-    char logged_uid[7];
-    char logged_password[9];
+    char logged_uid[UID_LEN + 1];
+    char logged_password[PASSWORD_LEN + 1];
     bool is_logged_in;
-    char server_ip[128];
+    char server_ip[PATH_BUFFER];
     char server_tcp_port[8];
 } client_state = {-1, NULL, "000000", "00000000", false, "localhost", "58001"};
 
@@ -137,8 +137,8 @@ int tcp_connect_to_server() {
 
 
 void cmd_login(const char* uid, const char* password) {
-    char message[64];
-    char response[64];
+    char message[RESPONSE_BUFFER];
+    char response[RESPONSE_BUFFER];
     
     
     if (client_state.is_logged_in) {
@@ -173,7 +173,7 @@ void cmd_login(const char* uid, const char* password) {
     }
     
     // Parse resposta: "RLI status\n"
-    char rsp_code[4], status[4];
+    char rsp_code[CMD_LEN], status[STATUS_LEN];
     if (sscanf(response, "%3s %3s", rsp_code, status) != 2) {
         printf("Error: Invalid response format\n");
         return;
@@ -205,8 +205,8 @@ void cmd_login(const char* uid, const char* password) {
 
 void cmd_logout() {
 
-    char message[64];
-    char response[64];
+    char message[RESPONSE_BUFFER];
+    char response[RESPONSE_BUFFER];
 
     snprintf(message, sizeof(message), "%s %s %s\n", 
              CMD_LOGOUT, client_state.logged_uid, client_state.logged_password);
@@ -216,7 +216,7 @@ void cmd_logout() {
         return;
     }
 
-    char rsp_code[4], status[4];
+    char rsp_code[CMD_LEN], status[STATUS_LEN];
     if (sscanf(response, "%3s %3s", rsp_code, status) != 2) {
         printf("Error: Invalid response format\n");
         return;
@@ -245,8 +245,8 @@ void cmd_logout() {
 
 void cmd_unregister() {
     
-    char message[64];
-    char response[64];
+    char message[RESPONSE_BUFFER];
+    char response[RESPONSE_BUFFER];
 
     snprintf(message, sizeof(message), "%s %s %s\n", CMD_UNREGISTER, client_state.logged_uid, client_state.logged_password);
 
@@ -255,7 +255,7 @@ void cmd_unregister() {
         return;
     }
 
-    char rsp_code[4], status[4];
+    char rsp_code[CMD_LEN], status[STATUS_LEN];
     if (sscanf(response, "%3s %3s", rsp_code, status) != 2) {
         printf("Error: Invalid response format\n");
         return;
@@ -309,7 +309,7 @@ void cmd_create_event(const char* name, const char* event_fname, const char* eve
     }
     
     
-    char full_datetime[20];
+    char full_datetime[DATETIME_BUFFER_LEN];
     snprintf(full_datetime, sizeof(full_datetime), "%s %s", event_date, event_time);
     if (is_date_before_now(full_datetime)) {
         printf("Error: Event date cannot be in the past\n");
@@ -323,7 +323,7 @@ void cmd_create_event(const char* name, const char* event_fname, const char* eve
     }
     
     
-    char dir[128];
+    char dir[PATH_BUFFER];
     snprintf(dir, sizeof(dir), "events/%s", event_fname);
     FILE *file = fopen(dir, "rb");
     if (!file) {
@@ -380,7 +380,7 @@ void cmd_create_event(const char* name, const char* event_fname, const char* eve
         return;
     }
     
-    char header[256];
+    char header[MEDIUM_BUFFER];
     int header_len = snprintf(header, sizeof(header),
                               "%s %s %s %s %s %s %d %s %ld ",
                               CMD_CREATE, client_state.logged_uid, client_state.logged_password,
@@ -425,7 +425,7 @@ void cmd_create_event(const char* name, const char* event_fname, const char* eve
     free(filedata);
     
     // Receber resposta: "RCE status [EID]\n"
-    char response[64];
+    char response[RESPONSE_BUFFER];
     ssize_t resp_len = read(tcp_socket, response, sizeof(response) - 1);
     close(tcp_socket);
     
@@ -436,7 +436,7 @@ void cmd_create_event(const char* name, const char* event_fname, const char* eve
     
     response[resp_len] = '\0';
     
-    char rsp_code[4], status[4], eid[4];
+    char rsp_code[CMD_LEN], status[STATUS_LEN], eid[EID_STR_LEN];
     int parsed = sscanf(response, "%3s %3s %3s", rsp_code, status, eid);
     
     if (parsed < 2) {
@@ -488,7 +488,7 @@ void cmd_close_event(const char* eid_str) {
     }
     
     // Construir comando: "CLS UID password EID\n"
-    char command[128];
+    char command[PATH_BUFFER];
     int cmd_len = snprintf(command, sizeof(command),
                           "%s %s %s %03d\n",
                           CMD_CLOSE, client_state.logged_uid, 
@@ -509,7 +509,7 @@ void cmd_close_event(const char* eid_str) {
     }
     
     // Receber resposta: "RCL status\n"
-    char response[64];
+    char response[RESPONSE_BUFFER];
     ssize_t resp_len = read(tcp_socket, response, sizeof(response) - 1);
     close(tcp_socket);
     
@@ -520,7 +520,7 @@ void cmd_close_event(const char* eid_str) {
     
     response[resp_len] = '\0';
     
-    char rsp_code[4], status[4];
+    char rsp_code[CMD_LEN], status[STATUS_LEN];
     int parsed = sscanf(response, "%3s %3s", rsp_code, status);
     
     if (parsed < 2) {
@@ -555,8 +555,8 @@ void cmd_close_event(const char* eid_str) {
 
 void cmd_my_events() {
     
-    char message[64];
-    char response[4096];
+    char message[RESPONSE_BUFFER];
+    char response[LARGE_BUFFER];
 
     if (!client_state.is_logged_in) {
         printf("Error: User needs to be logged in to view their events\n");
@@ -572,7 +572,7 @@ void cmd_my_events() {
     }
     
     // Parse resposta: "RME status [EID state]* \n"
-    char rsp_code[4], status[4];
+    char rsp_code[CMD_LEN], status[STATUS_LEN];
     if (sscanf(response, "%3s %3s", rsp_code, status) != 2) {
         printf("Error: Invalid response format\n");
         return;
@@ -666,8 +666,8 @@ void cmd_list_events() {
     }
 
 
-    char recv_buf[128];      // Buffer de leitura do socket
-    char tail[64] = "";     // Buffer auxiliar para dados TRUNCADOS
+    char recv_buf[PATH_BUFFER];      // Buffer de leitura do socket
+    char tail[RESPONSE_BUFFER] = "";     // Buffer auxiliar para dados TRUNCADOS
     size_t tail_len = 0;
 
     bool got_header = false;
@@ -689,7 +689,7 @@ void cmd_list_events() {
         recv_buf[n] = '\0';
 
         // Criar buffer de trabalho: tail (dados anteriores) + recv_buf (novos dados)
-        char work_buf[512];
+        char work_buf[FILE_PATH_BUFFER];
         if (tail_len + (size_t)n >= sizeof(work_buf)) {
             fprintf(stderr, "Error: work_buf overflow\n");
             break;
@@ -710,7 +710,7 @@ void cmd_list_events() {
                 continue;
             }
 
-            char rsp[4], status[4];
+            char rsp[CMD_LEN], status[STATUS_LEN];
             int consumed = 0;
             if (sscanf(work_buf, "%3s %3s %n", rsp, status, &consumed) != 2) {
                 fprintf(stderr, "Error: invalid LIST header\n");
@@ -748,7 +748,7 @@ void cmd_list_events() {
             int eid, state, consumed = 0;
             char name[EVENT_NAME_LEN + 1];
             char date[DATE_STR_LEN + 1];
-            char time[6];
+            char time[TIME_BUFFER_LEN];
 
             int rc = sscanf(work_buf + pos, "%d %10s %d %10s %5s %n",
                            &eid, name, &state, date, time, &consumed);
@@ -794,8 +794,8 @@ void cmd_list_events() {
 
 void cmd_change_password(const char* old_pass, const char* new_pass) {  
     
-    char command[128];
-    char response[64];
+    char command[PATH_BUFFER];
+    char response[RESPONSE_BUFFER];
 
     
     if (strlen(old_pass) != PASSWORD_LEN || strlen(new_pass) != PASSWORD_LEN) {
@@ -829,7 +829,7 @@ void cmd_change_password(const char* old_pass, const char* new_pass) {
     }
 
     response[resp_len] = '\0';
-    char rsp_code[4], status[4];
+    char rsp_code[CMD_LEN], status[STATUS_LEN];
     int parsed = sscanf(response, "%3s %3s", rsp_code, status);
     if (parsed < 2) {
         printf("Error: Invalid response format\n");
@@ -881,7 +881,7 @@ void cmd_show_event(const char* eid_str) {
         return;
     }
     
-    char message[64];
+    char message[RESPONSE_BUFFER];
     size_t total_received = 0;
 
     snprintf(message, sizeof(message), "%s %s\n",
@@ -931,7 +931,7 @@ void cmd_show_event(const char* eid_str) {
     close(tcp_socket);
     response[total_received] = '\0';
 
-    char rsp_code[4], status[4];
+    char rsp_code[CMD_LEN], status[STATUS_LEN];
     if (sscanf(response, "%3s %3s", rsp_code, status) != 2) {
         printf("Error: Invalid response format\n");
         free(response);
@@ -942,7 +942,7 @@ void cmd_show_event(const char* eid_str) {
         char *ptr = response + 7;  // Saltar "RSE OK "
         
         char uid[7], event_name[EVENT_NAME_LEN + 1], fname[25];
-        char event_date[DATE_STR_LEN + 1], event_time[6];;
+        char event_date[DATE_STR_LEN + 1], event_time[TIME_BUFFER_LEN];;
         int num_attendees, num_reserved;
         long fsize;
         
@@ -1020,7 +1020,7 @@ void cmd_show_event(const char* eid_str) {
         printf("  File Size:             %-25ld bytes\n", fsize);
 
         // Determinar status (sold-out ou passado)
-        char full_datetime[20];
+        char full_datetime[DATETIME_BUFFER_LEN];
         snprintf(full_datetime, sizeof(full_datetime), "%s %s", event_date, event_time);
         if (num_reserved >= num_attendees) {
             printf("────────────────────────────────────────────────────────────\n");
@@ -1042,8 +1042,8 @@ void cmd_show_event(const char* eid_str) {
 
 void cmd_reserve(const char* eid_str, int num_seats) {
     
-    char command[128];
-    char response[64];
+    char command[PATH_BUFFER];
+    char response[RESPONSE_BUFFER];
     int available_seats;
 
     if (!client_state.is_logged_in) {
@@ -1092,7 +1092,7 @@ void cmd_reserve(const char* eid_str, int num_seats) {
     
     response[resp_len] = '\0';
 
-    char rsp_code[4], status[4];
+    char rsp_code[CMD_LEN], status[STATUS_LEN];
     int parsed = sscanf(response, "%3s %3s", rsp_code, status);
 
     if (parsed < 2 || strcmp(rsp_code, RSP_RESERVE) != 0) {
@@ -1152,8 +1152,8 @@ void cmd_reserve(const char* eid_str, int num_seats) {
 
 void cmd_my_reservations() {
     
-    char message[64];
-    char response[4096]; //Buffer size for 50 reservations
+    char message[RESPONSE_BUFFER];
+    char response[LARGE_BUFFER]; //Buffer size for 50 reservations
 
     if (!client_state.is_logged_in) {
         printf("Error: User needs to be logged in to view their reservations\n");
@@ -1169,7 +1169,7 @@ void cmd_my_reservations() {
     }
 
     // Parse resposta: "RMR status [EID date value]* \n"
-    char rsp_code[4], status[4];
+    char rsp_code[CMD_LEN], status[STATUS_LEN];
     if (sscanf(response, "%3s %3s", rsp_code, status) != 2) {
         printf("Error: Invalid response format\n");
         return;
@@ -1255,7 +1255,7 @@ int main(int argc, char *argv[]) {
     char *server_ip = "localhost";
     char *server_port = "58084";
     char input[INPUT_BUFFER_SIZE];
-    char command[32], arg1[32], arg2[32], arg3[32], arg4[32], arg5[256];
+    char command[SMALL_BUFFER], arg1[SMALL_BUFFER], arg2[SMALL_BUFFER], arg3[SMALL_BUFFER], arg4[SMALL_BUFFER], arg5[MEDIUM_BUFFER];
     
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-n") == 0 && i + 1 < argc) {

@@ -24,8 +24,8 @@
  */
 void handle_login(int sockfd, char* message, struct sockaddr_in* client_addr, socklen_t addrlen) {
     
-    char cmd[4], uid[UID_LEN + 1], password[PASSWORD_LEN + 1];
-    char response[32];
+    char cmd[CMD_LEN], uid[UID_LEN + 1], password[PASSWORD_LEN + 1];
+    char response[SMALL_BUFFER];
     ssize_t sent;
     
     // Parse: "LIN UID password\n"
@@ -99,8 +99,8 @@ void handle_login(int sockfd, char* message, struct sockaddr_in* client_addr, so
 
 void handle_logout(int sockfd, char* message, struct sockaddr_in* client_addr, socklen_t addrlen) {
     
-    char cmd[4], uid[UID_LEN + 1], password[PASSWORD_LEN + 1];
-    char response[32];
+    char cmd[CMD_LEN], uid[UID_LEN + 1], password[PASSWORD_LEN + 1];
+    char response[SMALL_BUFFER];
     
     // Parse: "LOU UID password\n"
     int parsed = sscanf(message, "%3s %6s %8s", cmd, uid, password);
@@ -165,8 +165,8 @@ void handle_logout(int sockfd, char* message, struct sockaddr_in* client_addr, s
 }
 
 void handle_my_events(int sockfd, char* message, struct sockaddr_in* client_addr, socklen_t addrlen) {
-    char cmd[4], uid[UID_LEN + 1], password[PASSWORD_LEN + 1];
-    char response[4096]; 
+    char cmd[CMD_LEN], uid[UID_LEN + 1], password[PASSWORD_LEN + 1];
+    char response[LARGE_BUFFER]; 
 
     // Parse: "LME UID password\n"
     int parsed = sscanf(message, "%3s %6s %8s", cmd, uid, password);
@@ -214,8 +214,8 @@ void handle_my_events(int sockfd, char* message, struct sockaddr_in* client_addr
         return;
     }
     
-    char created_path[256];
-    snprintf(created_path, sizeof(created_path), "USERS/%s/CREATED", uid);
+    char created_path[MEDIUM_BUFFER];
+    snprintf(created_path, sizeof(created_path), "%s%s/%s", USERS_DIR, uid, CREATED_SUBDIR);
     
     struct dirent **entries;
     int n = scandir(created_path, &entries, NULL, alphasort);
@@ -282,8 +282,8 @@ void handle_my_events(int sockfd, char* message, struct sockaddr_in* client_addr
 }
 
 void handle_unregister(int sockfd, char* message, struct sockaddr_in* client_addr, socklen_t addrlen) {
-    char cmd[4], uid[UID_LEN + 1], password[PASSWORD_LEN + 1];
-    char response[32];
+    char cmd[CMD_LEN], uid[UID_LEN + 1], password[PASSWORD_LEN + 1];
+    char response[SMALL_BUFFER];
 
     // Parse: "UNR UID password\n"
     int parsed = sscanf(message, "%3s %6s %8s", cmd, uid, password);
@@ -343,10 +343,8 @@ void handle_unregister(int sockfd, char* message, struct sockaddr_in* client_add
 
 void handle_my_reservations(int sockfd, char* message, struct sockaddr_in* client_addr, socklen_t addrlen) {
 
-    char cmd[4], uid[UID_LEN + 1], password[PASSWORD_LEN + 1];
-    char response[4096];  // Buffer grande para lista de reservas até 50
-
-    // Parse: "LMR UID password\n"
+    char cmd[CMD_LEN], uid[UID_LEN + 1], password[PASSWORD_LEN + 1];
+    char response[LARGE_BUFFER];  // Buffer grande para lista de reservas
     int parsed = sscanf(message, "%3s %6s %8s", cmd, uid, password);
 
     if (parsed != 3) {
@@ -395,8 +393,8 @@ void handle_my_reservations(int sockfd, char* message, struct sockaddr_in* clien
         return;
     }
 
-    char created_path[256];
-    snprintf(created_path, sizeof(created_path), "USERS/%s/RESERVED", uid);
+    char created_path[MEDIUM_BUFFER];
+    snprintf(created_path, sizeof(created_path), "%s%s/%s", USERS_DIR, uid, RESERVED_SUBDIR);
 
     struct dirent **entries;
     int n = scandir(created_path, &entries, NULL, alphasort);
@@ -410,16 +408,16 @@ void handle_my_reservations(int sockfd, char* message, struct sockaddr_in* clien
     }
 
     // Ler todas as reservas para array
-    Reservation reservations[50];
+    Reservation reservations[MAX_RESERVATIONS_QUERY];
     int reservation_count = 0;
 
-    for (int i = 0; i < n && reservation_count < 50; i++) {
+    for (int i = 0; i < n && reservation_count < MAX_RESERVATIONS_QUERY; i++) {
         if (strcmp(entries[i]->d_name, ".") == 0 || strcmp(entries[i]->d_name, "..") == 0) {
             free(entries[i]);
             continue;
         }
 
-        char file_path[512];
+        char file_path[FILE_PATH_BUFFER];
         snprintf(file_path, sizeof(file_path), "%s/%s", created_path, entries[i]->d_name);
         
         FILE *fp = fopen(file_path, "r");
@@ -430,13 +428,15 @@ void handle_my_reservations(int sockfd, char* message, struct sockaddr_in* clien
         
         int file_eid, num_seats;
         char date[DATE_STR_LEN + 1];
-        char time[TIME_STR_LEN + 4];
+        char time[TIME_WITH_SECONDS_BUFFER_LEN];
         
-        if (fscanf(fp, "%d %d %10s %15s", &file_eid, &num_seats, date, time) == 4) {
+        if (fscanf(fp, "%d %d %10s %8s", &file_eid, &num_seats, date, time) == 4) {
             reservations[reservation_count].eid = file_eid;
             reservations[reservation_count].num_seats = num_seats;
             strncpy(reservations[reservation_count].date, date, sizeof(reservations[reservation_count].date) - 1);
+            reservations[reservation_count].date[sizeof(reservations[reservation_count].date) - 1] = '\0';
             strncpy(reservations[reservation_count].time, time, sizeof(reservations[reservation_count].time) - 1);
+            reservations[reservation_count].time[sizeof(reservations[reservation_count].time) - 1] = '\0';
             snprintf(reservations[reservation_count].datetime, sizeof(reservations[reservation_count].datetime), 
                      "%s %s", date, time);
             reservation_count++;
@@ -474,8 +474,6 @@ void handle_my_reservations(int sockfd, char* message, struct sockaddr_in* clien
         
     printf("[UDP] MY_RESERVATIONS: Sent %d reservation(s) to user %s\n", reservation_count, uid);
     
-
-
 }
 
 

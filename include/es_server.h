@@ -4,21 +4,16 @@
 #include <netinet/in.h>
 #include <stdbool.h>
 #include <pthread.h>
+#include "common_defs.h"
 
 
 #define MYPORT "58084"
 
+// Constantes específicas do servidor
 #define MAX_USERS 1000
 #define MAX_EVENTS 999
 #define MAX_RESERVATIONS 10000
-#define PASSWORD_LEN 8
-#define UID_LEN 6
-#define EVENT_NAME_LEN 10
-#define FILENAME_LEN 24
-#define MAX_FILE_SIZE 10000000 // 10 MB
 #define ARRAY_SIZE 128
-#define DATE_STR_LEN 10 // dd-mm-yyyy
-#define TIME_STR_LEN 5  // HH:MM
 
 typedef struct {
     char uid[UID_LEN + 1];
@@ -41,17 +36,11 @@ typedef struct {
 } Event;
 
 typedef struct {
-    char uid[UID_LEN + 1];
-    int eid;
-    int num_seats;
-} Reservation;
-
-typedef struct {
     int eid;
     int num_seats;
     char date[DATE_STR_LEN + 1];
-    char time[TIME_STR_LEN + 4];
-    char datetime[32];  
+    char time[TIME_WITH_SECONDS_BUFFER_LEN];  // HH:MM:SS
+    char datetime[DATETIME_WITH_SECONDS_LEN];  
 } Reservation;
 
 

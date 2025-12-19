@@ -1,4 +1,0 @@
-login 123456 pass1234
-logout
-login 123456 wrongpwd
-exit

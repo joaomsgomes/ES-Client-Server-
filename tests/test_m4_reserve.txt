@@ -1,6 +1,0 @@
-login 444444 pass4444
-list
-reserve 001 5
-myr
-logout
-exit

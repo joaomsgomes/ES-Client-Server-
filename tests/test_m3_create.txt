@@ -1,6 +1,0 @@
-login 333333 pass3333
-create Concert1 tests/event.txt 25-12-2025 50
-myevents
-list
-logout
-exit

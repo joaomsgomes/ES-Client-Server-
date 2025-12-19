@@ -71,7 +71,8 @@ typedef enum {
     CMD_TYPE_SHOW,
     CMD_TYPE_MY_RESERVATIONS,
     CMD_TYPE_HELP,
-    CMD_TYPE_EXIT
+    CMD_TYPE_EXIT,
+    CMD_TYPE_SLEEP
 } CommandType;
 
 #endif

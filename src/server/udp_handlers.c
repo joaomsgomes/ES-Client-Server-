@@ -166,7 +166,7 @@ void handle_logout(int sockfd, char* message, struct sockaddr_in* client_addr, s
 
 void handle_my_events(int sockfd, char* message, struct sockaddr_in* client_addr, socklen_t addrlen) {
     char cmd[4], uid[UID_LEN + 1], password[PASSWORD_LEN + 1];
-    char response[2048]; 
+    char response[4096]; 
 
     // Parse: "LME UID password\n"
     int parsed = sscanf(message, "%3s %6s %8s", cmd, uid, password);
@@ -344,7 +344,7 @@ void handle_unregister(int sockfd, char* message, struct sockaddr_in* client_add
 void handle_my_reservations(int sockfd, char* message, struct sockaddr_in* client_addr, socklen_t addrlen) {
 
     char cmd[4], uid[UID_LEN + 1], password[PASSWORD_LEN + 1];
-    char response[2048];  // Buffer grande para lista de reservas
+    char response[4096];  // Buffer grande para lista de reservas até 50
 
     // Parse: "LMR UID password\n"
     int parsed = sscanf(message, "%3s %6s %8s", cmd, uid, password);
@@ -409,24 +409,16 @@ void handle_my_reservations(int sockfd, char* message, struct sockaddr_in* clien
         return;
     }
 
-    int offset = snprintf(response, sizeof(response), "%s %s", RSP_MY_RESERVATIONS, STATUS_OK);
+    // Ler todas as reservas para array
+    Reservation reservations[50];
     int reservation_count = 0;
 
-    for (int i = 0; i < n; i++) {
-
-        if (i == 50) {
-            // Limitar a 50 reservas na resposta
-            free(entries[i]);
-            break;
-        }
-
-        if (strcmp(entries[i]->d_name, ".") == 0 ||
-            strcmp(entries[i]->d_name, "..") == 0) {
+    for (int i = 0; i < n && reservation_count < 50; i++) {
+        if (strcmp(entries[i]->d_name, ".") == 0 || strcmp(entries[i]->d_name, "..") == 0) {
             free(entries[i]);
             continue;
         }
 
-        
         char file_path[512];
         snprintf(file_path, sizeof(file_path), "%s/%s", created_path, entries[i]->d_name);
         
@@ -436,22 +428,20 @@ void handle_my_reservations(int sockfd, char* message, struct sockaddr_in* clien
             continue;
         }
         
-        
         int file_eid, num_seats;
         char date[DATE_STR_LEN + 1];
-        char time[TIME_STR_LEN + 4]; 
+        char time[TIME_STR_LEN + 4];
         
-        if (fscanf(fp, "%d %d %10s %15s", &file_eid, &num_seats, date, time) != 4) {
-            fclose(fp);
-            free(entries[i]);
-            continue;
+        if (fscanf(fp, "%d %d %10s %15s", &file_eid, &num_seats, date, time) == 4) {
+            reservations[reservation_count].eid = file_eid;
+            reservations[reservation_count].num_seats = num_seats;
+            strncpy(reservations[reservation_count].date, date, sizeof(reservations[reservation_count].date) - 1);
+            strncpy(reservations[reservation_count].time, time, sizeof(reservations[reservation_count].time) - 1);
+            snprintf(reservations[reservation_count].datetime, sizeof(reservations[reservation_count].datetime), 
+                     "%s %s", date, time);
+            reservation_count++;
         }
         fclose(fp);
-        
-        offset += snprintf(response + offset, sizeof(response) - offset,
-                        " %03d %s %s %d", file_eid, date, time, num_seats);
-        reservation_count++;
-
         free(entries[i]);
     }
     free(entries);
@@ -464,6 +454,19 @@ void handle_my_reservations(int sockfd, char* message, struct sockaddr_in* clien
         return;
     }
 
+    // Ordenar por data (mais recente primeiro)
+    qsort(reservations, reservation_count, sizeof(Reservation), compare_reservations_desc);
+
+    // Construir resposta com reservas ordenadas
+    int offset = snprintf(response, sizeof(response), "%s %s", RSP_MY_RESERVATIONS, STATUS_OK);
+    for (int i = 0; i < reservation_count; i++) {
+        offset += snprintf(response + offset, sizeof(response) - offset,
+                          " %03d %s %s %d", 
+                          reservations[i].eid, 
+                          reservations[i].date, 
+                          reservations[i].time, 
+                          reservations[i].num_seats);
+    }
     offset += snprintf(response + offset, sizeof(response) - offset, "\n");
 
     sendto(sockfd, response, strlen(response), 0,
@@ -474,3 +477,5 @@ void handle_my_reservations(int sockfd, char* message, struct sockaddr_in* clien
 
 
 }
+
+

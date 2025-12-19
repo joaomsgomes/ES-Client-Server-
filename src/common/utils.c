@@ -2,7 +2,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <time.h>
-
+#include <es_server.h>
 
 void show_help() {
     printf("\n╔═══════════════════════════════════════════════════════════════╗\n");
@@ -158,6 +158,14 @@ int compare_dates(const char* date1, const char* date2) {
     if (h1 != h2) return (h1 < h2) ? -1 : 1;
     if (min1 != min2) return (min1 < min2) ? -1 : 1;
     return 0;
+}
+
+
+// Comparador para ordenar reservas (mais recente primeiro)
+static int compare_reservations_desc(const void *a, const void *b) {
+    const Reservation *r1 = (const Reservation *)a;
+    const Reservation *r2 = (const Reservation *)b;
+    return -compare_dates(r1->datetime, r2->datetime);  // Negativo = ordem decrescente
 }
 
 bool is_date_before_now(const char* date) {

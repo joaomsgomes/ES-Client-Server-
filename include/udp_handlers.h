@@ -4,7 +4,6 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 
-
 // Login handler
 void handle_login(int sockfd, char* message, struct sockaddr_in* client_addr, socklen_t addrlen);
 

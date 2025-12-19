@@ -4,6 +4,14 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#define INPUT_BUFFER_SIZE 256
+#define PASSWORD_LEN 8
+#define UID_LEN 6
+#define DATE_STR_LEN 10
+#define TIME_STR_LEN 5
+#define EVENT_NAME_LEN 10
+#define MAX_FILE_SIZE 10485760 // 10 MB
+
 // ===== INICIALIZAÇÃO E CONEXÃO =====
 bool init_udp_connection(const char* server_ip, const char* server_port);
 int tcp_connect_to_server(void);

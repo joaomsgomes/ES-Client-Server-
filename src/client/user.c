@@ -13,12 +13,6 @@
 #include "../include/user_client.h"
 #include "../include/utils.h"
 
-#define INPUT_BUFFER_SIZE 256
-#define PASSWORD_LEN 8
-#define UID_LEN 6
-#define DATE_STR_LEN 10
-#define TIME_STR_LEN 5
-#define EVENT_NAME_LEN 10
 
 // Estado global do cliente
 static struct {
@@ -562,7 +556,7 @@ void cmd_close_event(const char* eid_str) {
 void cmd_my_events() {
     
     char message[64];
-    char response[1024];
+    char response[4096];
 
     if (!client_state.is_logged_in) {
         printf("Error: User needs to be logged in to view their events\n");
@@ -653,10 +647,10 @@ void cmd_my_events() {
 
 void cmd_list_events() {
 
-    if (!client_state.is_logged_in) {
+    /*if (!client_state.is_logged_in) {
         printf("Error: User needs to be logged in to view all available events\n");
         return;
-    }
+    }*/
 
     char message[16];
     snprintf(message, sizeof(message), "%s\n", CMD_LIST);
@@ -865,10 +859,10 @@ void cmd_change_password(const char* old_pass, const char* new_pass) {
 
 void cmd_show_event(const char* eid_str) {
 
-    if (!client_state.is_logged_in) {
+    /*if (!client_state.is_logged_in) {
         printf("Error: User needs to be logged in to view event details\n");
         return;
-    }
+    }*/
 
     if (strlen(eid_str) > 3) {
         printf("Error: Invalid EID (must be between 1 and 999)\n");
@@ -881,7 +875,7 @@ void cmd_show_event(const char* eid_str) {
         return;
     }
 
-    char *response = malloc(10485760); // 10 MB
+    char *response = malloc(MAX_FILE_SIZE); // 10 MB
     if (!response) {
         printf("Error: Memory allocation failed\n");
         return;
@@ -1159,7 +1153,7 @@ void cmd_reserve(const char* eid_str, int num_seats) {
 void cmd_my_reservations() {
     
     char message[64];
-    char response[1024];
+    char response[4096]; //Buffer size for 50 reservations
 
     if (!client_state.is_logged_in) {
         printf("Error: User needs to be logged in to view their reservations\n");
@@ -1251,6 +1245,7 @@ CommandType parse_command_type(const char* command) {
     if (strcmp(command, "myreservations") == 0 || strcmp(command, "myr") == 0) return CMD_TYPE_MY_RESERVATIONS;
     if (strcmp(command, "help") == 0) return CMD_TYPE_HELP;
     if (strcmp(command, "exit") == 0 || strcmp(command, "quit") == 0) return CMD_TYPE_EXIT;
+    if (strcmp(command, "sleep") == 0) return CMD_TYPE_SLEEP;
     return CMD_TYPE_UNKNOWN;
 }
 
@@ -1383,7 +1378,12 @@ int main(int argc, char *argv[]) {
             case CMD_TYPE_HELP:
                 show_help();
                 break;
-                
+            
+            case CMD_TYPE_SLEEP:
+                if (parsed == 1) {
+                    sleep(1);
+                }
+                break;
             case CMD_TYPE_EXIT:
                 if (client_state.is_logged_in) {
                     printf("Warning: You are still logged in. Logging out automatically...\n");

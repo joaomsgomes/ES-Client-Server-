@@ -46,5 +46,13 @@ typedef struct {
     int num_seats;
 } Reservation;
 
+typedef struct {
+    int eid;
+    int num_seats;
+    char date[DATE_STR_LEN + 1];
+    char time[TIME_STR_LEN + 4];
+    char datetime[32];  
+} Reservation;
+
 
 #endif

@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
+
 // ============ VALIDATION FUNCTIONS ============
 
 bool validate_uid(const char* uid);

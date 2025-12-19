@@ -1,0 +1,150 @@
+login 109512 monteiro
+create evento evento.txt 31-12-2025 20:00 200
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
+reserve 001 1
+sleep
